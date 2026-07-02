@@ -1,0 +1,346 @@
+/** Step 4: ribua ha'ir — square off each merged city. */
+
+import {
+  buffer,
+  difference,
+  featureCollection,
+  flatten,
+  intersect,
+  polygon as turfPolygon,
+} from '@turf/turf';
+import type { Position } from 'geojson';
+import type { City, PipelineContext, Poly, Squaring } from '../types';
+import {
+  CITY_GAP_AMOT,
+  KESHET_DEPTH_AMOT,
+  KESHET_MOUTH_AMOT,
+  KESHET_WIDTH_AMOT,
+  REMA_EXTRA_AMOT,
+  amahMeters,
+  type Settings,
+} from '../settings';
+import { boundingRect, minAreaRect } from '../geo/minRect';
+import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
+import { featureFromLocal } from '../geo/project';
+
+/** City fills ≥ this fraction of its min-area rectangle → already squared. */
+const OBLONG_RATIO = 0.95;
+/** A straight side must span ≥ this fraction of the city extent (Chazon Ish). */
+const STRAIGHT_SIDE_SPAN = 0.95;
+const COLLINEAR_TOL_RAD = (2 * Math.PI) / 180;
+const COLLINEAR_OFFSET_M = 3;
+
+export function squareCities(
+  ctx: PipelineContext,
+  settings: Settings,
+  merged: City[],
+): Squaring[] {
+  return merged.map((city) => squareOne(ctx, settings, city));
+}
+
+function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squaring {
+  const amah = amahMeters(settings);
+  const local = city.localPolygon;
+  const pts = allPositions(local.geometry);
+
+  // 1. Already-oblong check: city fills its min-area rectangle at some angle.
+  const minRect = minAreaRect(pts);
+  const cityArea = planarArea(local);
+  let angle: number;
+  if (cityArea / minRect.area >= OBLONG_RATIO) {
+    angle = normalizeAngle(minRect.angle);
+  } else {
+    // 2. Chazon Ish: one straight side along the city's full length fixes the angle.
+    const straight = settings.chazonIshStraightSide ? findStraightSideAngle(local, pts) : null;
+    angle = straight !== null ? normalizeAngle(straight) : 0;
+  }
+
+  // Work in the frame where the squaring rectangle is axis-aligned. The rect
+  // comes from the raw building vertices — the exact city bounds, without the
+  // half-gap dilation of the outline.
+  const rawRot = city.rawPointsLocal.map((p) => rotatePoint(p, -angle));
+  const rectRot = boundingRect(rawRot.length ? rawRot : allPositions(local.geometry), 0);
+  const [minX, minY] = rectRot.corners[0];
+  const [maxX, maxY] = rectRot.corners[2];
+  let squaringRot: Poly = rectPoly(minX, minY, maxX, maxY);
+  let isRectangle = true;
+
+  // 3. Keshet/gam exclusion — only worth analyzing for the city the query
+  // point belongs to (the local-frame origin), and against the gap-filled
+  // outline so streets don't read as concavities.
+  const originRot = rotatePoint([0, 0], -angle);
+  const containsPoint =
+    originRot[0] >= minX && originRot[0] <= maxX && originRot[1] >= minY && originRot[1] <= maxY;
+  const gaps = containsPoint
+    ? difference(featureCollection([squaringRot, rotateFeature(local, -angle)]))
+    : null;
+  if (gaps) {
+    for (const region of flatten(gaps).features as Poly[]) {
+      const cut = keshetCut(region, minX, minY, maxX, maxY, amah, settings);
+      if (!cut) continue;
+      const next = difference(featureCollection([squaringRot, cut]));
+      if (next) {
+        squaringRot = next as Poly;
+        isRectangle = false;
+        ctx.warn(
+          'Keshet/gam detected: part of the squaring is excluded ' +
+            (settings.keshetExclusion === 'entire'
+              ? '(entire keshet excluded).'
+              : '(excluded only where wider than 2000 amot).'),
+        );
+      }
+    }
+  }
+
+  // 4. Rema: every city gets an extra 70⅔ amot around its squaring.
+  const remaM = settings.remaExtra ? REMA_EXTRA_AMOT * amah : 0;
+  if (remaM > 0 && isRectangle) {
+    squaringRot = rectPoly(minX - remaM, minY - remaM, maxX + remaM, maxY + remaM);
+  }
+
+  let squaringLocal = rotateFeature(squaringRot, angle);
+  let polygon = featureFromLocal(ctx.frame, squaringLocal);
+  if (remaM > 0 && !isRectangle) {
+    // Non-rectangular squaring: approximate the Minkowski expansion with a
+    // geodesic buffer (round corners instead of square — slightly lenient there).
+    polygon = (buffer(polygon, remaM / 1000, { units: 'kilometers' }) as Poly) ?? polygon;
+  }
+
+  return { city, polygon, angle, isRectangle };
+}
+
+/** Keep angles in [-45°, 45°): a rectangle's orientation is symmetric mod 90°. */
+function normalizeAngle(theta: number): number {
+  const quarter = Math.PI / 2;
+  let a = theta % quarter;
+  if (a >= quarter / 2) a -= quarter;
+  if (a < -quarter / 2) a += quarter;
+  return a;
+}
+
+function rectPoly(minX: number, minY: number, maxX: number, maxY: number): Poly {
+  return turfPolygon([
+    [
+      [minX, minY],
+      [maxX, minY],
+      [maxX, maxY],
+      [minX, maxY],
+      [minX, minY],
+    ],
+  ]) as Poly;
+}
+
+/** Signed shoelace area of one ring. */
+function ringArea(ring: Position[]): number {
+  let s = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    s += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  }
+  return s / 2;
+}
+
+/** Planar polygon area in the local frame (holes subtracted). */
+function planarArea(poly: Poly): number {
+  const polys =
+    poly.geometry.type === 'Polygon' ? [poly.geometry.coordinates] : poly.geometry.coordinates;
+  let total = 0;
+  for (const rings of polys) {
+    for (const ring of rings) total += Math.abs(ringArea(ring)) * (ring === rings[0] ? 1 : -1);
+  }
+  return total;
+}
+
+/**
+ * Chazon Ish straight side: find a maximal collinear run of boundary edges
+ * spanning (nearly) the whole city in its direction; returns its angle or null.
+ */
+function findStraightSideAngle(local: Poly, allPts: Position[]): number | null {
+  const rings =
+    local.geometry.type === 'Polygon'
+      ? [local.geometry.coordinates[0]]
+      : local.geometry.coordinates.map((p) => p[0]);
+  // Use the outer ring of the largest part.
+  const ring = rings.reduce((best, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(best)) ? r : best));
+
+  const n = ring.length - 1;
+  for (let start = 0; start < n; start++) {
+    const a = ring[start];
+    let end = start + 1;
+    let b = ring[end % n];
+    const theta = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    // Extend the run while points stay collinear with the initial direction.
+    while (end - start < n) {
+      const next = ring[(end + 1) % n];
+      if (pointLineOffset(next, a, theta) > COLLINEAR_OFFSET_M) break;
+      const dir = Math.atan2(next[1] - b[1], next[0] - b[0]);
+      if (Math.abs(angleDiff(dir, theta)) > COLLINEAR_TOL_RAD) break;
+      end++;
+      b = ring[end % n];
+    }
+    const runLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (runLen === 0) continue;
+    // Does the run span the city's full extent along its own direction?
+    const u: Position = [Math.cos(theta), Math.sin(theta)];
+    let min = Infinity;
+    let max = -Infinity;
+    for (const p of allPts) {
+      const t = p[0] * u[0] + p[1] * u[1];
+      if (t < min) min = t;
+      if (t > max) max = t;
+    }
+    if (runLen >= STRAIGHT_SIDE_SPAN * (max - min)) return theta;
+  }
+  return null;
+}
+
+function angleDiff(a: number, b: number): number {
+  let d = a - b;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+function pointLineOffset(p: Position, origin: Position, theta: number): number {
+  const dx = p[0] - origin[0];
+  const dy = p[1] - origin[1];
+  return Math.abs(-Math.sin(theta) * dx + Math.cos(theta) * dy);
+}
+
+/**
+ * Decide whether a rect-minus-city region is a halachic keshet/gam and return
+ * the polygon to exclude from the squaring (or null to keep it).
+ * Frame: squaring rectangle is axis-aligned [minX..maxX]×[minY..maxY].
+ */
+function keshetCut(
+  region: Poly,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+  amah: number,
+  settings: Settings,
+): Poly | null {
+  const eps = 0.5;
+  const pts = allPositions(region.geometry);
+
+  // Which rectangle side does the region's mouth sit on? Pick the side with
+  // the longest contact span.
+  type Side = {
+    contact: number;
+    depthOf: (p: Position) => number;
+    alongOf: (p: Position) => number;
+    band: (d0: number, d1: number) => Poly;
+  };
+  const sides: Side[] = [
+    {
+      contact: span(pts.filter((p) => maxY - p[1] < eps), 0),
+      depthOf: (p) => maxY - p[1],
+      alongOf: (p) => p[0],
+      band: (d0, d1) => rectPoly(minX, maxY - d1, maxX, maxY - d0),
+    },
+    {
+      contact: span(pts.filter((p) => p[1] - minY < eps), 0),
+      depthOf: (p) => p[1] - minY,
+      alongOf: (p) => p[0],
+      band: (d0, d1) => rectPoly(minX, minY + d0, maxX, minY + d1),
+    },
+    {
+      contact: span(pts.filter((p) => maxX - p[0] < eps), 1),
+      depthOf: (p) => maxX - p[0],
+      alongOf: (p) => p[1],
+      band: (d0, d1) => rectPoly(maxX - d1, minY, maxX - d0, maxY),
+    },
+    {
+      contact: span(pts.filter((p) => p[0] - minX < eps), 1),
+      depthOf: (p) => p[0] - minX,
+      alongOf: (p) => p[1],
+      band: (d0, d1) => rectPoly(minX + d0, minY, minX + d1, maxY),
+    },
+  ];
+  const side = sides.reduce((best, s) => (s.contact > best.contact ? s : best));
+  if (side.contact <= 0) return null; // interior hole, not a keshet
+
+  // The outline is dilated by half the 70⅔ gap, which narrows a concavity by
+  // half a gap per arm — compensate the thresholds accordingly.
+  const gapM = CITY_GAP_AMOT * amah;
+  const mouthM = side.contact;
+  const depthM = Math.max(...pts.map(side.depthOf));
+  if (mouthM < KESHET_MOUTH_AMOT * amah - gapM || depthM <= KESHET_DEPTH_AMOT * amah - gapM / 2) {
+    return null;
+  }
+
+  if (settings.keshetExclusion === 'entire') return region;
+
+  // Exclude only where the keshet's cross-section is wider than 2000 amot:
+  // sample the width at increasing depth and cut at the last depth still wider.
+  const widthLimit = KESHET_WIDTH_AMOT * amah - gapM;
+  const steps = 100;
+  let cutDepth = 0;
+  for (let i = 0; i <= steps; i++) {
+    const d = (depthM * i) / steps;
+    if (crossSection(region, side.depthOf, side.alongOf, d) > widthLimit) cutDepth = d;
+  }
+  if (cutDepth <= 0) return null;
+  const band = side.band(0, cutDepth);
+  const clipped = intersectSafe(region, band);
+  return clipped ?? region;
+}
+
+/** Extent of points along axis 0 (x) or 1 (y). */
+function span(pts: Position[], axis: 0 | 1): number {
+  if (pts.length < 2) return 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const p of pts) {
+    const v = p[axis];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  return max - min;
+}
+
+/**
+ * Total cross-section length of the region at the given depth: sum of the
+ * intervals where the depth-contour line passes through the region.
+ */
+function crossSection(
+  region: Poly,
+  depthOf: (p: Position) => number,
+  alongOf: (p: Position) => number,
+  d: number,
+): number {
+  const polys =
+    region.geometry.type === 'Polygon'
+      ? [region.geometry.coordinates]
+      : region.geometry.coordinates;
+  // Where region edges cross the constant-depth contour, record the coordinate
+  // along the mouth side; sorted pairs of crossings bound the inside intervals.
+  const crossings: number[] = [];
+  for (const rings of polys) {
+    for (const ring of rings) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const p = ring[i];
+        const q = ring[i + 1];
+        const dp = depthOf(p) - d;
+        const dq = depthOf(q) - d;
+        if ((dp <= 0 && dq > 0) || (dp > 0 && dq <= 0)) {
+          const t = dp / (dp - dq);
+          crossings.push(alongOf(p) + t * (alongOf(q) - alongOf(p)));
+        }
+      }
+    }
+  }
+  if (crossings.length < 2) return 0;
+  crossings.sort((a, b) => a - b);
+  let total = 0;
+  for (let i = 0; i + 1 < crossings.length; i += 2) total += crossings[i + 1] - crossings[i];
+  return total;
+}
+
+function intersectSafe(a: Poly, b: Poly): Poly | null {
+  try {
+    return intersect(featureCollection([a, b])) as Poly | null;
+  } catch {
+    return null;
+  }
+}

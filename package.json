@@ -9,7 +9,15 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/leaflet": "^1.9.21",
+    "playwright": "^1.61.1",
     "typescript": "~6.0.2",
     "vite": "^8.1.1"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.3.5",
+    "leaflet": "^1.9.4",
+    "osmtogeojson": "^3.0.0-beta.5"
   }
 }
