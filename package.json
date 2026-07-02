@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build-gh": "tsc && vite build --base=/techumin/",
     "preview": "vite preview"
   },
   "devDependencies": {
