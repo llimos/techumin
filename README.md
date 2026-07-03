@@ -47,15 +47,16 @@ configurable: R' Chaim Naeh (48 cm), R' Moshe Feinstein (54 cm), Chazon Ish
 
 ### 3. Merge cities
 
-Two rules, iterated to a fixed point:
+Two phases:
 
-- **Proximity:** two cities at most **141⅓ amot** apart merge into one.
-- **Triangle (ro'in) rule:** given cities A, B and C, where B is within
-  **2000 amot** of both A and C, and the gap between A and C is at most
-  **282⅔ amot plus B's width** (measured along the A–C direction), A and C
-  merge — B is viewed as if moved into the gap between them, so it need not
-  physically sit between them. *Configurable:* whether B itself is absorbed
-  into the merged city.
+- **Proximity:** two cities at most **141⅓ amot** apart merge into one
+  (transitively), to completion.
+- **Triangle (ro'in) rule**, checked between the already-merged cities: given
+  cities A, B and C, where B is within **2000 amot** of both A and C, and the
+  gap between A and C is at most **282⅔ amot plus B's width** (measured along
+  the A–C direction), A and C merge — B is viewed as if moved into the gap
+  between them, so it need not physically sit between them. *Configurable:*
+  whether B itself is absorbed into the merged city.
 
 ### 4. Square the city (ribua ha'ir)
 
