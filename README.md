@@ -72,10 +72,12 @@ for the techum measurement:
 The squaring rectangle is the bounding box of the actual building vertices at
 the recorded angle. Then:
 
-- **Keshet/gam exclusion:** a concave region whose mouth spans at least
-  **4000 amot** with a depth of more than **2000 amot** before reaching the
-  city is excluded from the squaring. *Configurable:* exclude the entire
-  keshet, or only the part beyond where it widens past 2000 amot.
+- **Keshet/gam exclusion:** a concave region is measured along its true chord
+  — the segment between the two horns of the bow, at whatever angle it runs.
+  If the chord spans at least **4000 amot** and the region runs deeper than
+  **2000 amot** perpendicular to the chord before reaching the city, it is
+  excluded from the squaring. *Configurable:* exclude the entire keshet, or
+  only the part where its width (parallel to the chord) exceeds 2000 amot.
 - **Rema extra** (*configurable*): add an extra 70⅔ amot around the squaring.
 
 ### 5. Shvita bounds
@@ -103,7 +105,9 @@ Where the two rays pointing the same direction from adjacent corners end at
 unequal distances, *configurable:* extend the shorter line to match the
 longer, or join the endpoints on a diagonal. Finally the sides are joined and
 extended to their intersections, so the techum includes full (squared)
-corners.
+corners. Where a keshet/gam exclusion indents the squaring deeper than the
+measured distance, the techum follows the indented shape at the measured
+side distances.
 
 ## Configurable opinions
 
@@ -132,8 +136,9 @@ corners.
 - Measurement lines are straight; obstacles, water and karpef are ignored.
 - Keshet/gam and oblong detection use geometric tolerances, not psak-grade
   judgment.
-- The keshet indentation of the techum boundary and the Rema expansion of
-  non-rectangular squarings are geometric approximations.
+- Terrain inside a keshet indentation is not measured separately — the four
+  globally measured side distances are used; the Rema expansion of
+  non-rectangular squarings is a geometric approximation (round corners).
 - Dense areas (thousands of buildings) can take a minute or two to compute,
   and the default 3 km radius may truncate large cities — a warning is shown.
 

@@ -210,6 +210,11 @@ function pointLineOffset(p: Position, origin: Position, theta: number): number {
  * Decide whether a rect-minus-city region is a halachic keshet/gam and return
  * the polygon to exclude from the squaring (or null to keep it).
  * Frame: squaring rectangle is axis-aligned [minX..maxX]×[minY..maxY].
+ *
+ * The mouth (chord) runs between the two horns of the bow — the farthest-apart
+ * pair of region boundary points lying on the rectangle boundary — and depth
+ * is measured perpendicular to that chord, so a keshet opening diagonally or
+ * wrapping a rectangle corner is measured along its true chord.
  */
 function keshetCut(
   region: Poly,
@@ -223,80 +228,95 @@ function keshetCut(
   const eps = 0.5;
   const pts = allPositions(region.geometry);
 
-  // Which rectangle side does the region's mouth sit on? Pick the side with
-  // the longest contact span.
-  type Side = {
-    contact: number;
-    depthOf: (p: Position) => number;
-    alongOf: (p: Position) => number;
-    band: (d0: number, d1: number) => Poly;
-  };
-  const sides: Side[] = [
-    {
-      contact: span(pts.filter((p) => maxY - p[1] < eps), 0),
-      depthOf: (p) => maxY - p[1],
-      alongOf: (p) => p[0],
-      band: (d0, d1) => rectPoly(minX, maxY - d1, maxX, maxY - d0),
-    },
-    {
-      contact: span(pts.filter((p) => p[1] - minY < eps), 0),
-      depthOf: (p) => p[1] - minY,
-      alongOf: (p) => p[0],
-      band: (d0, d1) => rectPoly(minX, minY + d0, maxX, minY + d1),
-    },
-    {
-      contact: span(pts.filter((p) => maxX - p[0] < eps), 1),
-      depthOf: (p) => maxX - p[0],
-      alongOf: (p) => p[1],
-      band: (d0, d1) => rectPoly(maxX - d1, minY, maxX - d0, maxY),
-    },
-    {
-      contact: span(pts.filter((p) => p[0] - minX < eps), 1),
-      depthOf: (p) => p[0] - minX,
-      alongOf: (p) => p[1],
-      band: (d0, d1) => rectPoly(minX + d0, minY, minX + d1, maxY),
-    },
-  ];
-  const side = sides.reduce((best, s) => (s.contact > best.contact ? s : best));
-  if (side.contact <= 0) return null; // interior hole, not a keshet
+  const mouthPts = pts.filter(
+    (p) => p[0] - minX < eps || maxX - p[0] < eps || p[1] - minY < eps || maxY - p[1] < eps,
+  );
+  if (mouthPts.length < 2) return null; // interior hole, not a keshet
+
+  // Chord = the farthest-apart pair of mouth points (the horns).
+  let h1 = mouthPts[0];
+  let h2 = mouthPts[1];
+  let best = -1;
+  for (let i = 0; i < mouthPts.length; i++) {
+    for (let j = i + 1; j < mouthPts.length; j++) {
+      const dx = mouthPts[i][0] - mouthPts[j][0];
+      const dy = mouthPts[i][1] - mouthPts[j][1];
+      const d2 = dx * dx + dy * dy;
+      if (d2 > best) {
+        best = d2;
+        h1 = mouthPts[i];
+        h2 = mouthPts[j];
+      }
+    }
+  }
+  const mouthM = Math.sqrt(best);
+  if (mouthM === 0) return null;
+
+  // Chord frame: u along the chord, v perpendicular pointing into the region
+  // (the side where the region extends deeper).
+  const ux = (h2[0] - h1[0]) / mouthM;
+  const uy = (h2[1] - h1[1]) / mouthM;
+  let vx = -uy;
+  let vy = ux;
+  let maxPos = 0;
+  let maxNeg = 0;
+  for (const p of pts) {
+    const v = (p[0] - h1[0]) * vx + (p[1] - h1[1]) * vy;
+    if (v > maxPos) maxPos = v;
+    if (-v > maxNeg) maxNeg = -v;
+  }
+  if (maxNeg > maxPos) {
+    vx = -vx;
+    vy = -vy;
+  }
+  const uOf = (p: Position) => (p[0] - h1[0]) * ux + (p[1] - h1[1]) * uy;
+  const vOf = (p: Position) => (p[0] - h1[0]) * vx + (p[1] - h1[1]) * vy;
 
   // The outline is dilated by half the 70⅔ gap, which narrows a concavity by
   // half a gap per arm — compensate the thresholds accordingly.
   const gapM = CITY_GAP_AMOT * amah;
-  const mouthM = side.contact;
-  const depthM = Math.max(...pts.map(side.depthOf));
+  const depthM = Math.max(maxPos, maxNeg);
   if (mouthM < KESHET_MOUTH_AMOT * amah - gapM || depthM <= KESHET_DEPTH_AMOT * amah - gapM / 2) {
     return null;
   }
 
   if (settings.keshetExclusion === 'entire') return region;
 
-  // Exclude only where the keshet's cross-section is wider than 2000 amot:
-  // sample the width at increasing depth and cut at the last depth still wider.
+  // Exclude only where the keshet's cross-section (parallel to the chord) is
+  // wider than 2000 amot: sample the width at increasing depth and cut at the
+  // last depth still wider.
   const widthLimit = KESHET_WIDTH_AMOT * amah - gapM;
   const steps = 100;
   let cutDepth = 0;
   for (let i = 0; i <= steps; i++) {
     const d = (depthM * i) / steps;
-    if (crossSection(region, side.depthOf, side.alongOf, d) > widthLimit) cutDepth = d;
+    if (crossSection(region, vOf, uOf, d) > widthLimit) cutDepth = d;
   }
   if (cutDepth <= 0) return null;
-  const band = side.band(0, cutDepth);
+  // Band in the chord frame from below the chord (v < 0 pockets beyond it lie
+  // even farther from the city) up to the cut depth.
+  let uMin = Infinity;
+  let uMax = -Infinity;
+  let vMin = 0;
+  for (const p of pts) {
+    const u = uOf(p);
+    const v = vOf(p);
+    if (u < uMin) uMin = u;
+    if (u > uMax) uMax = u;
+    if (v < vMin) vMin = v;
+  }
+  const m = 1; // margin so the band strictly covers the region's edges
+  const bandCorners = (
+    [
+      [uMin - m, vMin - m],
+      [uMax + m, vMin - m],
+      [uMax + m, cutDepth],
+      [uMin - m, cutDepth],
+    ] as Position[]
+  ).map(([u, v]): Position => [h1[0] + u * ux + v * vx, h1[1] + u * uy + v * vy]);
+  const band = turfPolygon([[...bandCorners, bandCorners[0]]]) as Poly;
   const clipped = intersectSafe(region, band);
   return clipped ?? region;
-}
-
-/** Extent of points along axis 0 (x) or 1 (y). */
-function span(pts: Position[], axis: 0 | 1): number {
-  if (pts.length < 2) return 0;
-  let min = Infinity;
-  let max = -Infinity;
-  for (const p of pts) {
-    const v = p[axis];
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  return max - min;
 }
 
 /**

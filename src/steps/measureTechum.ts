@@ -1,6 +1,6 @@
 /** Step 6: measure 2000 amot out from the shvita corners and build the techum. */
 
-import { buffer, difference, featureCollection, flatten, polygon as turfPolygon } from '@turf/turf';
+import { difference, featureCollection, polygon as turfPolygon } from '@turf/turf';
 import type { Position } from 'geojson';
 import type { PipelineContext, Poly, Shvita } from '../types';
 import {
@@ -11,6 +11,7 @@ import {
   type Settings,
 } from '../settings';
 import { boundingRect } from '../geo/minRect';
+import { minkowskiSumRect } from '../geo/minkowski';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, fromLocal } from '../geo/project';
 import { elevationAt } from '../elevation';
@@ -53,15 +54,19 @@ export async function measureTechum(
     ctx.warn('Elevation data unavailable for part of the measurement — those lines were measured flat.');
   }
 
+  const dW = Math.max(dWs, dWn);
+  const dE = Math.max(dEs, dEn);
+  const dS = Math.max(dSw, dSe);
+  const dN = Math.max(dNw, dNe);
+
   let techumRot: Poly;
   if (settings.unequalLines === 'extend') {
-    // Extend the shorter line to the longer: each side sits at the max distance.
-    techumRot = rectPoly(
-      minX - Math.max(dWs, dWn),
-      minY - Math.max(dSw, dSe),
-      maxX + Math.max(dEs, dEn),
-      maxY + Math.max(dNw, dNe),
-    );
+    // Extend the shorter line to the longer: every point within the measured
+    // per-direction distances of the shvita, with square corners. For a
+    // rectangular shvita this is the rectangle expanded by the max distance
+    // per side; a keshet-excluded squaring indents the techum wherever the
+    // exclusion runs deeper than the measured distance.
+    techumRot = minkowskiSumRect(rot, dW, dE, dS, dN);
   } else {
     // Join unequal lines on the diagonal: each side is the line through its two
     // measured endpoints; corners are the intersections of adjacent side lines.
@@ -77,22 +82,25 @@ export async function measureTechum(
   }
 
   // A keshet-excluded squaring indents the techum where the exclusion runs
-  // deeper than the techum distance. Approximate the indentation by eroding
-  // the excluded region by the average measured distance.
+  // deeper than the measured distance. The 'extend' Minkowski sum handles this
+  // by construction; for 'diagonal' the notch beyond the shvita's reach is cut
+  // out of the diagonal outline. Either way, warn that the indentation uses
+  // the four globally measured side distances.
   if (shvita.source === 'city') {
-    const excluded = difference(featureCollection([rectPoly(minX, minY, maxX, maxY), rot]));
-    if (excluded) {
-      const dAvg = (dNw + dNe + dSw + dSe + dWs + dWn + dEs + dEn) / 8;
-      for (const region of flatten(excluded).features as Poly[]) {
-        const geo = featureFromLocal(ctx.frame, rotateFeature(region, shvita.angle));
-        const eroded = buffer(geo, -dAvg / 1000, { units: 'kilometers' });
-        if (!eroded) continue;
-        const erodedRot = rotateFeature(featureToLocal(ctx.frame, eroded as Poly), -shvita.angle);
-        const cut = difference(featureCollection([techumRot, erodedRot]));
-        if (cut) {
-          techumRot = cut as Poly;
-          ctx.warn('Techum indented by the keshet/gam exclusion (approximated).');
+    const notch = difference(featureCollection([rectPoly(minX, minY, maxX, maxY), rot]));
+    if (notch) {
+      const reach =
+        settings.unequalLines === 'extend' ? techumRot : minkowskiSumRect(rot, dW, dE, dS, dN);
+      const outside = difference(featureCollection([notch as Poly, reach]));
+      if (outside) {
+        if (settings.unequalLines !== 'extend') {
+          const cut = difference(featureCollection([techumRot, outside as Poly]));
+          if (cut) techumRot = cut as Poly;
         }
+        ctx.warn(
+          'Techum indented by the keshet/gam exclusion — the indentation uses the ' +
+            'measured side distances; terrain inside it is not measured separately.',
+        );
       }
     }
   }
