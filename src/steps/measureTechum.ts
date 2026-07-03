@@ -68,17 +68,23 @@ export async function measureTechum(
     // exclusion runs deeper than the measured distance.
     techumRot = minkowskiSumRect(rot, dW, dE, dS, dN);
   } else {
-    // Join unequal lines on the diagonal: each side is the line through its two
-    // measured endpoints; corners are the intersections of adjacent side lines.
-    const north: [Position, Position] = [[minX, maxY + dNw], [maxX, maxY + dNe]];
-    const south: [Position, Position] = [[minX, minY - dSw], [maxX, minY - dSe]];
-    const east: [Position, Position] = [[maxX + dEs, minY], [maxX + dEn, maxY]];
-    const west: [Position, Position] = [[minX - dWs, minY], [minX - dWn, maxY]];
-    const nw = lineIntersection(north, west);
-    const ne = lineIntersection(north, east);
-    const se = lineIntersection(south, east);
-    const sw = lineIntersection(south, west);
-    techumRot = turfPolygon([[nw, ne, se, sw, nw]]) as Poly;
+    // Join on the diagonal: each side is the segment between its own two
+    // measured endpoints (a trapezoid edge when they differ), and adjacent
+    // sides are joined endpoint-to-endpoint across each corner, so the
+    // corners are cut diagonally rather than squared out.
+    techumRot = turfPolygon([
+      [
+        [minX, maxY + dNw], // north ray from NW
+        [maxX, maxY + dNe], // north ray from NE
+        [maxX + dEn, maxY], // east ray from NE
+        [maxX + dEs, minY], // east ray from SE
+        [maxX, minY - dSe], // south ray from SE
+        [minX, minY - dSw], // south ray from SW
+        [minX - dWs, minY], // west ray from SW
+        [minX - dWn, maxY], // west ray from NW
+        [minX, maxY + dNw],
+      ],
+    ]) as Poly;
   }
 
   // A keshet-excluded squaring indents the techum where the exclusion runs
@@ -181,12 +187,4 @@ function rectPoly(minX: number, minY: number, maxX: number, maxY: number): Poly 
       [minX, minY],
     ],
   ]) as Poly;
-}
-
-/** Intersection of two infinite lines, each given by two points. */
-function lineIntersection([a, b]: [Position, Position], [c, d]: [Position, Position]): Position {
-  const denom = (a[0] - b[0]) * (c[1] - d[1]) - (a[1] - b[1]) * (c[0] - d[0]);
-  if (Math.abs(denom) < 1e-9) return b; // parallel — degenerate, fall back
-  const t = ((a[0] - c[0]) * (c[1] - d[1]) - (a[1] - c[1]) * (c[0] - d[0])) / denom;
-  return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
 }
