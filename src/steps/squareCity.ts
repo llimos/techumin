@@ -19,6 +19,7 @@ import {
   amahMeters,
   type Settings,
 } from '../settings';
+import { pointInRings } from '../geo/dilate';
 import { boundingRect, minAreaRect } from '../geo/minRect';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal } from '../geo/project';
@@ -71,12 +72,11 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   const originRot = rotatePoint([0, 0], -angle);
   const containsPoint =
     originRot[0] >= minX && originRot[0] <= maxX && originRot[1] >= minY && originRot[1] <= maxY;
-  const gaps = containsPoint
-    ? difference(featureCollection([squaringRot, rotateFeature(local, -angle)]))
-    : null;
+  const cityRot = rotateFeature(local, -angle);
+  const gaps = containsPoint ? difference(featureCollection([squaringRot, cityRot])) : null;
   if (gaps) {
     for (const region of flatten(gaps).features as Poly[]) {
-      const cut = keshetCut(region, minX, minY, maxX, maxY, amah, settings);
+      const cut = keshetCut(region, cityRot, minX, minY, maxX, maxY, amah, settings);
       if (!cut) continue;
       const next = difference(featureCollection([squaringRot, cut]));
       if (next) {
@@ -218,6 +218,7 @@ function pointLineOffset(p: Position, origin: Position, theta: number): number {
  */
 function keshetCut(
   region: Poly,
+  cityRot: Poly,
   minX: number,
   minY: number,
   maxX: number,
@@ -228,29 +229,48 @@ function keshetCut(
   const eps = 0.5;
   const pts = allPositions(region.geometry);
 
-  const mouthPts = pts.filter(
-    (p) => p[0] - minX < eps || maxX - p[0] < eps || p[1] - minY < eps || maxY - p[1] < eps,
-  );
-  if (mouthPts.length < 2) return null; // interior hole, not a keshet
-
-  // Chord = the farthest-apart pair of mouth points (the horns).
-  let h1 = mouthPts[0];
-  let h2 = mouthPts[1];
-  let best = -1;
-  for (let i = 0; i < mouthPts.length; i++) {
-    for (let j = i + 1; j < mouthPts.length; j++) {
-      const dx = mouthPts[i][0] - mouthPts[j][0];
-      const dy = mouthPts[i][1] - mouthPts[j][1];
-      const d2 = dx * dx + dy * dy;
-      if (d2 > best) {
-        best = d2;
-        h1 = mouthPts[i];
-        h2 = mouthPts[j];
-      }
-    }
+  // A bow opens onto the rectangle boundary in exactly one contiguous arc,
+  // and its interior is empty. A region with several disconnected mouths (or
+  // with city parts inside it as holes) is the space *between* parts of a
+  // halachically-merged city — it separates the city rather than indenting
+  // it, and must stay inside the squaring.
+  if (region.geometry.type !== 'Polygon' || region.geometry.coordinates.length > 1) return null;
+  const ring = region.geometry.coordinates[0];
+  const m = ring.length - 1;
+  const sideMask = (p: Position): number =>
+    (maxY - p[1] < eps ? 1 : 0) |
+    (p[1] - minY < eps ? 2 : 0) |
+    (maxX - p[0] < eps ? 4 : 0) |
+    (p[0] - minX < eps ? 8 : 0);
+  // An edge is part of the mouth when it runs along a rectangle side.
+  const isMouth: boolean[] = [];
+  for (let i = 0; i < m; i++) {
+    isMouth.push((sideMask(ring[i]) & sideMask(ring[i + 1])) !== 0);
   }
-  const mouthM = Math.sqrt(best);
+  let runs = 0;
+  for (let i = 0; i < m; i++) {
+    if (isMouth[i] && !isMouth[(i - 1 + m) % m]) runs++;
+  }
+  if (runs !== 1) return null; // interior hole, or several mouths (split city)
+
+  // Horns = the endpoints of the single mouth arc (it may wrap a corner).
+  let start = 0;
+  while (!(isMouth[start] && !isMouth[(start - 1 + m) % m])) start++;
+  let end = start;
+  while (isMouth[end % m]) end++;
+  const h1 = ring[start];
+  const h2 = ring[end % m];
+  const mouthM = Math.hypot(h2[0] - h1[0], h2[1] - h1[1]);
   if (mouthM === 0) return null;
+
+  // The chord must also span open ground: buildings interrupting the straight
+  // line between the horns mean this is not a bow's mouth.
+  const samples = Math.min(500, Math.max(20, Math.round(mouthM / 30)));
+  for (let i = 1; i < samples; i++) {
+    const t = i / samples;
+    const p: Position = [h1[0] + (h2[0] - h1[0]) * t, h1[1] + (h2[1] - h1[1]) * t];
+    if (pointInCity(p, cityRot)) return null;
+  }
 
   // Chord frame: u along the chord, v perpendicular pointing into the region
   // (the side where the region extends deeper).
@@ -305,13 +325,13 @@ function keshetCut(
     if (u > uMax) uMax = u;
     if (v < vMin) vMin = v;
   }
-  const m = 1; // margin so the band strictly covers the region's edges
+  const margin = 1; // so the band strictly covers the region's edges
   const bandCorners = (
     [
-      [uMin - m, vMin - m],
-      [uMax + m, vMin - m],
-      [uMax + m, cutDepth],
-      [uMin - m, cutDepth],
+      [uMin - margin, vMin - margin],
+      [uMax + margin, vMin - margin],
+      [uMax + margin, cutDepth],
+      [uMin - margin, cutDepth],
     ] as Position[]
   ).map(([u, v]): Position => [h1[0] + u * ux + v * vx, h1[1] + u * uy + v * vy]);
   const band = turfPolygon([[...bandCorners, bandCorners[0]]]) as Poly;
@@ -355,6 +375,12 @@ function crossSection(
   let total = 0;
   for (let i = 0; i + 1 < crossings.length; i += 2) total += crossings[i + 1] - crossings[i];
   return total;
+}
+
+function pointInCity(p: Position, city: Poly): boolean {
+  const g = city.geometry;
+  if (g.type === 'Polygon') return pointInRings(p, g.coordinates);
+  return g.coordinates.some((rings) => pointInRings(p, rings));
 }
 
 function intersectSafe(a: Poly, b: Poly): Poly | null {
