@@ -32,6 +32,54 @@ function segSegDist(a1: Position, a2: Position, b1: Position, b2: Position): num
   return Math.min(d(a1, b1, b2), d(a2, b1, b2), d(b1, a1, a2), d(b2, a1, a2));
 }
 
+function exteriorRings(poly: Poly): Position[][] {
+  const g = poly.geometry;
+  return g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map((rings) => rings[0]);
+}
+
+/**
+ * True when the boundary gap is ≤ limit. Early-exits on the first close
+ * segment pair; exterior rings only (for disjoint polygons the closest points
+ * always lie on exterior rings), with a per-segment bbox reject — much faster
+ * than an exact polygonGap on large outlines.
+ */
+export function polygonGapUnder(a: Poly, b: Poly, limit: number): boolean {
+  // Precompute b's segment bboxes once.
+  const bSegs: { ring: Position[]; boxes: Float64Array }[] = exteriorRings(b).map((ring) => {
+    const boxes = new Float64Array((ring.length - 1) * 4);
+    for (let j = 0; j < ring.length - 1; j++) {
+      boxes[j * 4] = Math.min(ring[j][0], ring[j + 1][0]);
+      boxes[j * 4 + 1] = Math.max(ring[j][0], ring[j + 1][0]);
+      boxes[j * 4 + 2] = Math.min(ring[j][1], ring[j + 1][1]);
+      boxes[j * 4 + 3] = Math.max(ring[j][1], ring[j + 1][1]);
+    }
+    return { ring, boxes };
+  });
+  for (const ra of exteriorRings(a)) {
+    for (let i = 0; i < ra.length - 1; i++) {
+      const p = ra[i];
+      const q = ra[i + 1];
+      const minX = Math.min(p[0], q[0]) - limit;
+      const maxX = Math.max(p[0], q[0]) + limit;
+      const minY = Math.min(p[1], q[1]) - limit;
+      const maxY = Math.max(p[1], q[1]) + limit;
+      for (const { ring, boxes } of bSegs) {
+        for (let j = 0; j < ring.length - 1; j++) {
+          if (
+            boxes[j * 4] > maxX ||
+            boxes[j * 4 + 1] < minX ||
+            boxes[j * 4 + 2] > maxY ||
+            boxes[j * 4 + 3] < minY
+          )
+            continue;
+          if (segSegDist(p, q, ring[j], ring[j + 1]) <= limit) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export function polygonGap(a: Poly, b: Poly): number {
   let min = Infinity;
   for (const ra of rings(a)) {

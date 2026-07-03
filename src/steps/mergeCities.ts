@@ -2,8 +2,15 @@
 
 import type { Position } from 'geojson';
 import type { City, PipelineContext } from '../types';
-import { CITY_GAP_AMOT, MERGE_GAP_AMOT, amahMeters, type Settings } from '../settings';
-import { polygonGap } from '../geo/gaps';
+import {
+  CITY_GAP_AMOT,
+  MERGE_GAP_AMOT,
+  TRIANGLE_SIDE_AMOT,
+  TRIANGLE_SPAN_AMOT,
+  amahMeters,
+  type Settings,
+} from '../settings';
+import { polygonGap, polygonGapUnder } from '../geo/gaps';
 import { allPositions } from '../geo/rotate';
 import { featureFromLocal } from '../geo/project';
 import { bboxGap, bboxOf, type BBox } from '../geo/dilate';
@@ -31,6 +38,9 @@ export function mergeCities(
     const sy = h.reduce((s, q) => s + q[1], 0);
     return [sx / h.length, sy / h.length] as [number, number];
   });
+  // Hulls of the raw building vertices — real (undilated) city extents, for
+  // measuring the middle city's width in the triangle rule.
+  const rawHulls = cities.map((c) => convexHull(c.rawPointsLocal));
 
   // Union-find over city indices.
   const parent = cities.map((_, i) => i);
@@ -48,29 +58,68 @@ export function mergeCities(
     }
   }
 
-  // Rule 2: triangle rule — a third city C between A and B (viewed as if moved
-  // onto the A–B corridor) leaves ≤ 141⅓ amot to each. Projection extremes lie
-  // on the convex hull, so hulls suffice. Iterate to a fixed point, since a
-  // merge can put new cities within range.
+  // Rule 2: triangle rule — a middle city B close to both A and C lets them
+  // merge even though they are too far apart on their own. Real-distance
+  // conditions (outline gaps are compensated for the 70⅔ dilation):
+  //   gap(A,B) ≤ 2000 amot, gap(B,C) ≤ 2000 amot, and
+  //   gap(A,C) ≤ 282⅔ amot + B's width along the A–C direction
+  // (B is viewed as if moved into the gap between A and C, where its width
+  // fills part of the distance). Iterate to a fixed point, since a merge can
+  // put new cities within range.
+  const amah = amahMeters(settings);
+  const comp = CITY_GAP_AMOT * amah;
+  const sideLimitM = TRIANGLE_SIDE_AMOT * amah - comp;
+  const spanBaseM = TRIANGLE_SPAN_AMOT * amah - comp;
+  const n = cities.length;
+
+  const sideCache = new Map<number, boolean>();
+  const sideOk = (i: number, j: number): boolean => {
+    const key = i < j ? i * n + j : j * n + i;
+    let ok = sideCache.get(key);
+    if (ok === undefined) {
+      ok =
+        bboxGap(bboxes[i], bboxes[j]) <= sideLimitM &&
+        polygonGapUnder(local[i], local[j], sideLimitM);
+      sideCache.set(key, ok);
+    }
+    return ok;
+  };
+
+  const spanCache = new Map<number, boolean>();
+  const spanOk = (a: number, c: number, b: number): boolean => {
+    const key = (a * n + c) * n + b;
+    let ok = spanCache.get(key);
+    if (ok === undefined) {
+      const limit = spanBaseM + widthAlong(rawHulls[b], centroids[a], centroids[c]);
+      ok =
+        bboxGap(bboxes[a], bboxes[c]) <= limit && polygonGapUnder(local[a], local[c], limit);
+      spanCache.set(key, ok);
+    }
+    return ok;
+  };
+
   let changed = true;
   while (changed) {
     changed = false;
-    for (let a = 0; a < cities.length; a++) {
-      for (let b = a + 1; b < cities.length; b++) {
-        if (find(a) === find(b)) continue;
-        for (let c = 0; c < cities.length; c++) {
-          if (c === a || c === b) continue;
-          if (triangleJoins(hulls, centroids, a, b, c, gapM)) {
-            join(a, b);
-            if (settings.triangleAbsorbsThird) join(a, c);
-            changed = true;
-            ctx.warn(
-              'Triangle rule applied: two cities merged via a third between them' +
-                (settings.triangleAbsorbsThird
-                  ? ' (third city included).'
-                  : ' (third city not included).'),
-            );
-          }
+    for (let a = 0; a < n; a++) {
+      for (let c = a + 1; c < n; c++) {
+        if (find(a) === find(c)) continue;
+        for (let b = 0; b < n; b++) {
+          if (b === a || b === c) continue;
+          // After the pair merges mid-scan, keep going only to absorb further
+          // qualifying middle cities not yet in the group.
+          const pairMerged = find(a) === find(c);
+          if (pairMerged && (!settings.triangleAbsorbsThird || find(b) === find(a))) continue;
+          if (!sideOk(a, b) || !sideOk(b, c) || !spanOk(a, c, b)) continue;
+          join(a, c);
+          if (settings.triangleAbsorbsThird) join(a, b);
+          changed = true;
+          ctx.warn(
+            'Triangle rule applied: two cities merged via a third between them' +
+              (settings.triangleAbsorbsThird
+                ? ' (third city included).'
+                : ' (third city not included).'),
+          );
         }
       }
     }
@@ -102,42 +151,22 @@ export function mergeCities(
   return merged;
 }
 
-/**
- * Project A, B, C onto the A–B centroid axis; C (at its natural station along
- * the axis) must sit inside the A–B gap leaving ≤ gapM on each side.
- */
-function triangleJoins(
-  hulls: Position[][],
-  centroids: [number, number][],
-  a: number,
-  b: number,
-  c: number,
-  gapM: number,
-): boolean {
-  const [ax, ay] = centroids[a];
-  const [bx, by] = centroids[b];
-  const len = Math.hypot(bx - ax, by - ay);
-  if (len === 0) return false;
-  const ux = (bx - ax) / len;
-  const uy = (by - ay) / len;
-
-  const interval = (i: number): [number, number] => {
-    let min = Infinity;
-    let max = -Infinity;
-    for (const [x, y] of hulls[i]) {
-      const t = (x - ax) * ux + (y - ay) * uy;
-      if (t < min) min = t;
-      if (t > max) max = t;
-    }
-    return [min, max];
-  };
-
-  const [, aMax] = interval(a);
-  const [bMin] = interval(b);
-  if (bMin <= aMax) return false; // no corridor gap along the axis
-  const [cMin, cMax] = interval(c);
-  const gapLeft = cMin - aMax;
-  const gapRight = bMin - cMax;
-  // C must project into the corridor (not beyond either end) and close both gaps.
-  return gapLeft >= 0 && gapRight >= 0 && gapLeft <= gapM && gapRight <= gapM;
+/** Extent of a point set projected onto the from→to direction (meters). */
+function widthAlong(
+  hull: Position[],
+  from: [number, number],
+  to: [number, number],
+): number {
+  const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  if (len === 0 || hull.length === 0) return 0;
+  const ux = (to[0] - from[0]) / len;
+  const uy = (to[1] - from[1]) / len;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const [x, y] of hull) {
+    const t = x * ux + y * uy;
+    if (t < min) min = t;
+    if (t > max) max = t;
+  }
+  return max - min;
 }

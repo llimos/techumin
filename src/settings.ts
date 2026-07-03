@@ -48,6 +48,10 @@ export const MAX_AMAH_M = Math.max(...Object.values(AMAH_CM)) / 100;
 // Fixed halachic constants (amot)
 export const CITY_GAP_AMOT = 70 + 2 / 3;
 export const MERGE_GAP_AMOT = 141 + 1 / 3;
+/** Triangle rule: max distance from the middle city to each outer city. */
+export const TRIANGLE_SIDE_AMOT = 2000;
+/** Triangle rule: max gap between the outer cities, beyond the middle city's width (2 × 141⅓). */
+export const TRIANGLE_SPAN_AMOT = 2 * MERGE_GAP_AMOT;
 export const TECHUM_AMOT = 2000;
 export const KESHET_MOUTH_AMOT = 4000;
 export const KESHET_DEPTH_AMOT = 2000;
