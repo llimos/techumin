@@ -9,8 +9,12 @@ import type { LatLon } from './types';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <aside id="sidebar"></aside>
-  <div id="map"></div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="calc-overlay" hidden></div>
+  </div>
 `;
+const overlay = app.querySelector<HTMLElement>('#calc-overlay')!;
 
 const pipeline = new TechumPipeline(DEFAULT_SETTINGS);
 const map = new TechumMap(document.querySelector('#map')!);
@@ -27,8 +31,10 @@ function pick(point: LatLon): void {
   pipeline.setPoint(point);
 }
 
-pipeline.onUpdate = ({ outputs, warnings, running, error }) => {
+pipeline.onUpdate = ({ outputs, warnings, running, stage, error }) => {
   map.render(outputs);
   sidebar.setWarnings(warnings);
+  overlay.hidden = !running;
+  if (running) overlay.textContent = `Calculating — ${stage ?? 'starting'}…`;
   sidebar.setStatus(error ? `Error: ${error}` : running ? 'Calculating…' : 'Done.');
 };

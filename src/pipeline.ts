@@ -26,6 +26,8 @@ export interface PipelineUpdate {
   outputs: PipelineOutputs;
   warnings: string[];
   running: boolean;
+  /** Label of the step currently being calculated, while running. */
+  stage?: string;
   error?: string;
 }
 
@@ -38,6 +40,33 @@ const STEP_NAMES = [
   '6 measureTechum',
 ];
 
+const STAGE_LABELS = [
+  'Fetching buildings',
+  'Finding cities',
+  'Merging cities',
+  'Squaring the cities',
+  'Finding the shvisa bounds',
+  'Measuring the techum',
+];
+
+/**
+ * Resolve after the browser has painted, so a status update shows before a
+ * CPU-heavy step — with a timeout fallback, since rAF does not fire in hidden
+ * tabs and the pipeline must keep running there.
+ */
+const nextPaint = (): Promise<void> =>
+  new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        resolve();
+      }
+    };
+    requestAnimationFrame(() => setTimeout(finish, 0));
+    setTimeout(finish, 100);
+  });
+
 export class TechumPipeline {
   private point: LatLon | null = null;
   private settings: Settings;
@@ -45,6 +74,7 @@ export class TechumPipeline {
   /** Warnings collected per step, so partial re-runs keep earlier warnings. */
   private stepWarnings: string[][] = [[], [], [], [], [], []];
   private runToken = 0;
+  private stage?: string;
 
   onUpdate: (update: PipelineUpdate) => void = () => {};
 
@@ -105,9 +135,12 @@ export class TechumPipeline {
     o.techum = undefined;
     for (let i = fromStep - 1; i < 6; i++) this.stepWarnings[i] = [];
 
-    this.emit(true);
     try {
       for (let step = fromStep; step <= 6; step++) {
+        this.stage = STAGE_LABELS[step - 1];
+        this.emit(true);
+        await nextPaint(); // let the stage popup show before a blocking step
+        if (token !== this.runToken) return;
         ctx.warnings = [];
         const t0 = performance.now();
         await this.runStep(step, ctx);
@@ -118,10 +151,12 @@ export class TechumPipeline {
           this.stepOutput(step),
           ctx.warnings.length ? { warnings: ctx.warnings } : '',
         );
+        if (step === 6) this.stage = undefined;
         this.emit(step < 6);
       }
     } catch (err) {
       if (token !== this.runToken) return;
+      this.stage = undefined;
       console.error('[techum] pipeline failed', err);
       this.emit(false, err instanceof Error ? err.message : String(err));
     }
@@ -161,6 +196,7 @@ export class TechumPipeline {
       outputs: { ...this.outputs },
       warnings: this.stepWarnings.flat(),
       running,
+      stage: running ? this.stage : undefined,
       error,
     });
   }

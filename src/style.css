@@ -14,9 +14,51 @@ body,
   display: flex;
 }
 
-#map {
+#map-wrap {
   flex: 1;
   min-width: 0;
+  position: relative;
+}
+
+#map {
+  height: 100%;
+}
+
+#calc-overlay {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  padding: 8px 16px 8px 38px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #2c3e50;
+  white-space: nowrap;
+}
+
+#calc-overlay::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -8px;
+  border: 2px solid #ccc;
+  border-top-color: #2980b9;
+  border-radius: 50%;
+  animation: calc-spin 0.9s linear infinite;
+}
+
+@keyframes calc-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 #sidebar {

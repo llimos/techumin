@@ -25,7 +25,7 @@ export class TechumMap {
       ['cities', 'Cities (raw clusters)', false],
       ['merged', 'Merged cities', true],
       ['squarings', 'Squaring (ribua)', true],
-      ['shvita', 'Shvita bounds', true],
+      ['shvita', 'Shvisa bounds', true],
       ['techum', 'Techum boundary', true],
     ];
     for (const [key, label, on] of defs) {

@@ -61,12 +61,19 @@ export async function fetchBuildings(
   return { buildings, enclosing, radiusM };
 }
 
+/** A hung mirror must not stall the pipeline forever. */
+const FETCH_TIMEOUT_MS = 90_000;
+
 /** Public Overpass instances get overloaded; fall through the mirror list. */
 async function fetchWithFallback(ctx: PipelineContext, query: string): Promise<any> {
   let lastError: Error | null = null;
   for (const url of OVERPASS_URLS) {
     try {
-      const res = await fetch(url, { method: 'POST', body: query });
+      const res = await fetch(url, {
+        method: 'POST',
+        body: query,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) throw new Error(`Overpass request failed: ${res.status} ${res.statusText}`);
       return await res.json();
     } catch (err) {

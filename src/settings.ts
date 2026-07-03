@@ -70,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customAmahCm: 48,
   triangleAbsorbsThird: true,
   chazonIshStraightSide: false,
-  keshetExclusion: 'entire',
+  keshetExclusion: 'past2000',
   remaExtra: false,
   fourAmotMode: 'each',
   unequalLines: 'extend',

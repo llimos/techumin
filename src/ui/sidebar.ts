@@ -12,6 +12,7 @@ export interface SidebarCallbacks {
 const DISCLAIMERS = [
   'This tool estimates techum boundaries for reference only — consult a rabbi for practical psak.',
   'City shapes come from OpenStreetMap building data; results are only as good as OSM coverage in the area.',
+  'City eruvim are not considered — according to some opinions an eruv can change the city boundary.',
   'Measurement lines are straight; obstacles, water and karpef are not considered.',
   'Terrain data has ~10–30 m resolution; micro-terrain is ignored.',
 ];
@@ -26,7 +27,12 @@ export class Sidebar {
     this.cb = cb;
     root.innerHTML = `
       <h1>Techumin</h1>
-      <p class="subtitle">Techum Shabbat calculator</p>
+      <p class="subtitle">Techum Shabbos calculator</p>
+
+      <section class="disclaimers">
+        <h2>Disclaimers</h2>
+        <ul>${DISCLAIMERS.map((d) => `<li>${d}</li>`).join('')}</ul>
+      </section>
 
       <section>
         <h2>Location</h2>
@@ -88,11 +94,6 @@ export class Sidebar {
       <section>
         <h2>Warnings</h2>
         <ul id="warnings" class="warnings"></ul>
-      </section>
-
-      <section class="disclaimers">
-        <h2>Disclaimers</h2>
-        <ul>${DISCLAIMERS.map((d) => `<li>${d}</li>`).join('')}</ul>
       </section>
     `;
 
