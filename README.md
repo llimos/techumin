@@ -91,6 +91,8 @@ the recorded angle. Then:
 Determine the area from which the techum is measured:
 
 - Point inside a city → that city's squaring (and its angle).
+- Otherwise, point inside a squaring (a squared-off corner region) → that
+  squaring; if squarings of several cities overlap there, the nearest city's.
 - Otherwise, point inside a building → the building's north–south bounding
   rectangle.
 - Otherwise → a square of 4 amot around the point. *Configurable:* 4 amot in

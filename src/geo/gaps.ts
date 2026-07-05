@@ -122,6 +122,19 @@ export function polygonGapLine(a: Poly, b: Poly): GapLine {
   return best;
 }
 
+/** Distance from a point to a polygon's boundary (exterior rings). */
+export function pointPolygonGap(p: Position, poly: Poly): number {
+  let min = Infinity;
+  for (const ring of exteriorRings(poly)) {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const q = closestOnSeg(p, ring[i], ring[i + 1]);
+      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      if (d < min) min = d;
+    }
+  }
+  return min;
+}
+
 /**
  * True when the segment p–q touches or crosses the closed ring given as an
  * open vertex loop (e.g. a convex hull). A segment with both endpoints
