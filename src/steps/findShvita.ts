@@ -1,11 +1,12 @@
 /** Step 5: determine the shvita bounds the techum is measured from. */
 
 import { booleanPointInPolygon, point as turfPoint, polygon as turfPolygon } from '@turf/turf';
-import type { PipelineContext, Poly, Shvita, Squaring } from '../types';
+import type { Position } from 'geojson';
+import type { LatLon, PipelineContext, Poly, Shvita, Squaring } from '../types';
 import { FOUR_AMOT, amahMeters, type Settings } from '../settings';
 import { boundingRect } from '../geo/minRect';
 import { allPositions } from '../geo/rotate';
-import { featureFromLocal, featureToLocal } from '../geo/project';
+import { featureFromLocal, featureToLocal, toLocal } from '../geo/project';
 import { pointPolygonGap } from '../geo/gaps';
 import { debugLog } from '../debug';
 import type { FetchResult } from './fetchBuildings';
@@ -15,8 +16,10 @@ export function findShvita(
   settings: Settings,
   fetched: FetchResult,
   squarings: Squaring[],
+  point: LatLon = ctx.point,
 ): Shvita {
-  const pt = turfPoint([ctx.point.lon, ctx.point.lat]);
+  const pt = turfPoint([point.lon, point.lat]);
+  const localPt = toLocal(ctx.frame, [point.lon, point.lat]);
   const amah = amahMeters(settings);
 
   // Inside a city outline (with its ibur strip)? That city's squaring is the
@@ -38,7 +41,7 @@ export function findShvita(
   let bestDist = Infinity;
   for (const sq of squarings) {
     if (!booleanPointInPolygon(pt, sq.polygon)) continue;
-    const dist = pointPolygonGap([0, 0], sq.city.localPolygon); // point = local origin
+    const dist = pointPolygonGap(localPt, sq.city.localPolygon);
     if (dist < bestDist) {
       best = sq;
       bestDist = dist;
@@ -54,8 +57,10 @@ export function findShvita(
   }
 
   // Inside a building? Its North-South bounding rectangle is the shvita.
-  if (fetched.enclosing) {
-    const local = featureToLocal(ctx.frame, fetched.enclosing);
+  // (fetched.enclosing was found for the home point — look up per measure point.)
+  const enclosing = fetched.buildings.find((b) => booleanPointInPolygon(pt, b));
+  if (enclosing) {
+    const local = featureToLocal(ctx.frame, enclosing);
     const rect = boundingRect(allPositions(local.geometry), 0);
     const [minX, minY] = rect.corners[0];
     const [maxX, maxY] = rect.corners[2];
@@ -75,24 +80,35 @@ export function findShvita(
     return { polygon, angle: 0, source: 'building' };
   }
 
-  // Open country: a 4-amot square around the point (frame origin).
-  const half = settings.fourAmotMode === 'each' ? FOUR_AMOT * amah : (FOUR_AMOT / 2) * amah;
-  const polygon = featureFromLocal(
-    ctx.frame,
-    turfPolygon([
-      [
-        [-half, -half],
-        [half, -half],
-        [half, half],
-        [-half, half],
-        [-half, -half],
-      ],
-    ]) as Poly,
-  );
+  // Open country: a 4-amot square around the point.
   ctx.warn(
     `Point is in open country; measuring from ${
       settings.fourAmotMode === 'each' ? '4 amot in each direction' : '4 amot total'
     } around the point.`,
+  );
+  return pointShvita(ctx, settings, localPt);
+}
+
+/** A 4-amot square (per fourAmotMode) around a point given in local coords. */
+export function pointShvita(
+  ctx: PipelineContext,
+  settings: Settings,
+  localPt: Position,
+): Shvita {
+  const amah = amahMeters(settings);
+  const half = settings.fourAmotMode === 'each' ? FOUR_AMOT * amah : (FOUR_AMOT / 2) * amah;
+  const [x, y] = localPt;
+  const polygon = featureFromLocal(
+    ctx.frame,
+    turfPolygon([
+      [
+        [x - half, y - half],
+        [x + half, y - half],
+        [x + half, y + half],
+        [x - half, y + half],
+        [x - half, y - half],
+      ],
+    ]) as Poly,
   );
   return { polygon, angle: 0, source: 'point' };
 }

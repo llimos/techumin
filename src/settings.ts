@@ -25,6 +25,9 @@ export interface Settings {
   fourAmotMode: FourAmotMode;
   /** Unequal measurement lines: extend the shorter, or join on the diagonal. */
   unequalLines: UnequalLines;
+  /** Eruv techumin may be placed anywhere in the city's techum, not only
+   *  within 2000 amot of the start point. */
+  eruvCityTechum: boolean;
   /** Non-halachic: half-side of the square building-fetch area, meters. */
   fetchRadiusM: number;
 }
@@ -79,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remaExtra: false,
   fourAmotMode: 'each',
   unequalLines: 'extend',
+  eruvCityTechum: false,
   fetchRadiusM: 3000,
 };
 
@@ -95,6 +99,7 @@ const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
   remaExtra: (v) => typeof v === 'boolean',
   fourAmotMode: (v) => v === 'each' || v === 'total',
   unequalLines: (v) => v === 'extend' || v === 'diagonal',
+  eruvCityTechum: (v) => typeof v === 'boolean',
   fetchRadiusM: (v) => typeof v === 'number' && v >= 1000 && v <= 6000,
 };
 
@@ -127,7 +132,7 @@ export function saveSettings(settings: Settings): void {
 /**
  * First pipeline step (1-based) affected by each setting; a change re-runs the
  * pipeline from that step. Steps: 1 fetch, 2 cities, 3 merge, 4 square,
- * 5 shvita, 6 techum.
+ * 5 shvita, 6 techum, 7-8 the same two steps measured from the eruv.
  */
 export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   fetchRadiusM: 1,
@@ -140,4 +145,5 @@ export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   remaExtra: 4,
   fourAmotMode: 5,
   unequalLines: 6,
+  eruvCityTechum: 7,
 };

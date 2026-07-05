@@ -1,7 +1,7 @@
 /** Leaflet map with one overlay layer per pipeline output. */
 
 import L from 'leaflet';
-import type { LatLon } from './types';
+import type { LatLon, Poly } from './types';
 import type { PipelineOutputs } from './pipeline';
 import { DEBUG } from './debug';
 
@@ -29,7 +29,10 @@ const AmahScale = (L.Control.Scale as any).extend({
 export class TechumMap {
   readonly map: L.Map;
   private marker: L.CircleMarker | null = null;
+  private eruvMarker: L.Marker | null = null;
   private layers: Record<string, L.LayerGroup> = {};
+  /** Highlight of the area where an eruv may be placed (not in the control). */
+  private eruvZone: L.LayerGroup;
   private amahScale: AmahScaleControl;
 
   onPick: (point: LatLon) => void = () => {};
@@ -61,6 +64,7 @@ export class TechumMap {
       if (on) group.addTo(this.map);
     }
     L.control.layers({}, overlays, { collapsed: false }).addTo(this.map);
+    this.eruvZone = L.layerGroup().addTo(this.map);
 
     this.map.on('click', (e: L.LeafletMouseEvent) => {
       this.onPick({ lat: e.latlng.lat, lon: e.latlng.lng });
@@ -81,6 +85,40 @@ export class TechumMap {
       fillColor: '#e74c3c',
       fillOpacity: 0.9,
     }).addTo(this.map);
+  }
+
+  /** Show the placed eruv as a bread marker; null removes it. */
+  setEruvPoint(point: LatLon | null): void {
+    if (this.eruvMarker) {
+      this.eruvMarker.remove();
+      this.eruvMarker = null;
+    }
+    if (!point) return;
+    this.eruvMarker = L.marker([point.lat, point.lon], {
+      icon: L.divIcon({ className: 'eruv-marker', html: '🍞', iconSize: [28, 28] }),
+      interactive: false,
+    }).addTo(this.map);
+  }
+
+  /** Highlight the area where the eruv may be placed; null clears it. */
+  setEruvZone(zone: Poly | null): void {
+    this.eruvZone.clearLayers();
+    if (!zone) return;
+    L.geoJSON(zone, {
+      style: {
+        color: '#f39c12',
+        weight: 3,
+        dashArray: '8 6',
+        fillColor: '#f1c40f',
+        fillOpacity: 0.12,
+      },
+      interactive: false,
+    }).addTo(this.eruvZone);
+  }
+
+  /** Bread cursor over the map while placing an eruv. */
+  setEruvCursor(on: boolean): void {
+    this.map.getContainer().classList.toggle('eruv-placing', on);
   }
 
   render(outputs: PipelineOutputs): void {
@@ -117,16 +155,25 @@ export class TechumMap {
       dashArray: '8 4',
       fillOpacity: 0.04,
     });
-    set('shvita', outputs.shvita && [outputs.shvita.polygon], {
-      color: '#2980b9',
-      weight: 2,
-      fillOpacity: 0.05,
-    });
-    set('techum', outputs.techum && [outputs.techum], {
-      color: '#27ae60',
-      weight: 3,
-      fillOpacity: 0.06,
-    });
+    // With an eruv placed, the shvita/techum layers show only the eruv's, in
+    // a purple scheme; the home outputs stay cached but are not drawn.
+    const eruv = !!(outputs.eruvShvita || outputs.eruvTechum);
+    set(
+      'shvita',
+      eruv
+        ? outputs.eruvShvita && [outputs.eruvShvita.polygon]
+        : outputs.shvita && [outputs.shvita.polygon],
+      eruv
+        ? { color: '#8e44ad', weight: 2, dashArray: '4 3', fillOpacity: 0.05 }
+        : { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
+    );
+    set(
+      'techum',
+      eruv ? outputs.eruvTechum && [outputs.eruvTechum] : outputs.techum && [outputs.techum],
+      eruv
+        ? { color: '#8e44ad', weight: 3, fillOpacity: 0.06 }
+        : { color: '#27ae60', weight: 3, fillOpacity: 0.06 },
+    );
 
     if (DEBUG) {
       const group = this.layers['cityNumbers'];
@@ -144,8 +191,9 @@ export class TechumMap {
       });
     }
 
-    if (outputs.techum) {
-      this.map.fitBounds(L.geoJSON(outputs.techum).getBounds(), { padding: [24, 24] });
+    const fit = outputs.eruvTechum ?? outputs.techum;
+    if (fit) {
+      this.map.fitBounds(L.geoJSON(fit).getBounds(), { padding: [24, 24] });
     }
   }
 }

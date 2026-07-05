@@ -7,7 +7,12 @@ import type { LatLon } from '../types';
 export interface SidebarCallbacks {
   onSettingsChange(partial: Partial<Settings>): void;
   onLocate(point: LatLon, label?: string): void;
+  /** The eruv button: arms placement, cancels it, or removes the eruv. */
+  onEruvButton(): void;
 }
+
+/** UI phase of the eruv techumin button, driven by the orchestrator. */
+export type EruvPhase = 'disabled' | 'ready' | 'arming' | 'placed';
 
 const DISCLAIMERS = [
   'This tool estimates techum boundaries for reference only — consult a rabbi for practical psak.',
@@ -21,6 +26,8 @@ export class Sidebar {
   private warningsEl: HTMLElement;
   private statusEl: HTMLElement;
   private resultsEl: HTMLElement;
+  private eruvBtnEl: HTMLButtonElement;
+  private eruvHintEl: HTMLElement;
   private cb: SidebarCallbacks;
 
   constructor(root: HTMLElement, settings: Settings, cb: SidebarCallbacks) {
@@ -44,6 +51,12 @@ export class Sidebar {
         <button id="geolocate" type="button">Use my location</button>
         <p class="hint">…or click anywhere on the map.</p>
         <div id="status"></div>
+      </section>
+
+      <section>
+        <h2>Eruv techumin</h2>
+        <button id="eruv-btn" type="button" disabled>Place eruv techumin</button>
+        <p class="hint" id="eruv-hint">Calculate a techum first.</p>
       </section>
 
       <section>
@@ -88,6 +101,11 @@ export class Sidebar {
             <option value="diagonal">Join on the diagonal</option>
           </select>
         </label>
+        <label><input type="checkbox" data-setting="eruvCityTechum" />
+          Eruv techumin may be placed anywhere in the city's techum</label>
+        <p class="hint eruv-notice" id="eruv-city-notice" hidden>Even according to this
+          opinion, most poskim do not allow returning to the start point when the eruv
+          is more than 2000 amot from it.</p>
       </section>
 
       <section>
@@ -106,6 +124,8 @@ export class Sidebar {
     this.warningsEl = root.querySelector('#warnings')!;
     this.statusEl = root.querySelector('#status')!;
     this.resultsEl = root.querySelector('#search-results')!;
+    this.eruvBtnEl = root.querySelector<HTMLButtonElement>('#eruv-btn')!;
+    this.eruvHintEl = root.querySelector('#eruv-hint')!;
 
     // Initialize control values from settings and wire change events.
     for (const el of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-setting]')) {
@@ -122,16 +142,20 @@ export class Sidebar {
               : el.value;
         if (key === 'amahPreset') this.toggleCustomAmah(raw === 'custom');
         if (key === 'fetchRadiusM') this.updateRadiusLabel(raw as number);
+        if (key === 'eruvCityTechum') this.toggleEruvNotice(raw as boolean);
         this.cb.onSettingsChange({ [key]: raw } as Partial<Settings>);
       });
     }
     this.toggleCustomAmah(settings.amahPreset === 'custom');
     this.updateRadiusLabel(settings.fetchRadiusM);
+    this.toggleEruvNotice(settings.eruvCityTechum);
 
     root.querySelector<HTMLFormElement>('#search-form')!.addEventListener('submit', (e) => {
       e.preventDefault();
       void this.search(root.querySelector<HTMLInputElement>('#search-input')!.value);
     });
+
+    this.eruvBtnEl.addEventListener('click', () => this.cb.onEruvButton());
 
     root.querySelector('#geolocate')!.addEventListener('click', () => {
       navigator.geolocation.getCurrentPosition(
@@ -147,6 +171,28 @@ export class Sidebar {
 
   private updateRadiusLabel(radiusM: number): void {
     document.querySelector('#radius-label')!.textContent = (radiusM / 1000).toFixed(1);
+  }
+
+  private toggleEruvNotice(show: boolean): void {
+    document.querySelector<HTMLElement>('#eruv-city-notice')!.hidden = !show;
+  }
+
+  setEruvState(phase: EruvPhase): void {
+    this.eruvBtnEl.disabled = phase === 'disabled';
+    this.eruvBtnEl.textContent =
+      phase === 'arming'
+        ? 'Cancel placing eruv'
+        : phase === 'placed'
+          ? 'Remove eruv'
+          : 'Place eruv techumin';
+    this.eruvHintEl.textContent =
+      phase === 'arming'
+        ? 'Click inside the highlighted area to place the eruv.'
+        : phase === 'placed'
+          ? 'The techum is measured from the eruv.'
+          : phase === 'ready'
+            ? 'Place an eruv to measure the techum from it instead.'
+            : 'Calculate a techum first.';
   }
 
   private async search(query: string): Promise<void> {

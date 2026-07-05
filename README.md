@@ -117,6 +117,18 @@ corners. Where a keshet/gam exclusion indents the squaring deeper than the
 measured distance, the techum follows the indented shape at the measured
 side distances.
 
+### Eruv techumin
+
+After a techum is calculated, an eruv techumin can be placed on the map (the
+sidebar button highlights the area where it may be placed — *configurable:*
+within 2000 amot of the start point, or anywhere within the city's techum;
+even according to the lenient opinion, a warning notes that most poskim do
+not allow returning to the start point when the eruv is beyond 2000 amot from
+it). The shvita then moves to the eruv: steps 5–6 re-run from the eruv's
+location under the same rules (in a city → the city's squaring; in a building
+→ the building; open country → 4 amot), while the original calculation stays
+cached, so removing the eruv restores it instantly.
+
 ## Configurable opinions
 
 | Setting | Options (default first) | Recalculates from |
@@ -129,6 +141,7 @@ side distances.
 | Rema extra 70⅔ amot | off / on | Step 4 |
 | No-structure fallback | 4 amot each direction / 4 amot total | Step 5 |
 | Unequal measurement lines | extend shorter / join on diagonal | Step 6 |
+| Eruv techumin placement | within 2000 amot of the start point / anywhere in the city's techum | Eruv re-measure |
 | Data radius (non-halachic) | 3 km default | Step 1 |
 
 ## Data sources
