@@ -9,9 +9,11 @@ import { flatten } from '@turf/turf';
 import type { Feature, Polygon, Position } from 'geojson';
 import type { City, PipelineContext, Poly } from '../types';
 import { CITY_GAP_AMOT, MIN_CITY_BUILDINGS, amahMeters, type Settings } from '../settings';
-import { featureFromLocal, toLocal } from '../geo/project';
+import { featureFromLocal, fromLocal, toLocal } from '../geo/project';
+import { DEBUG, debugLog } from '../debug';
 import { allPositions } from '../geo/rotate';
 import { bboxOf, dilateHull, pointInRings, type BBox } from '../geo/dilate';
+import { convexHull } from '../geo/minRect';
 import { unionAll } from '../geo/unionAll';
 import type { FetchResult } from './fetchBuildings';
 
@@ -47,6 +49,7 @@ export function findCities(
   const clusterBBoxes: BBox[] = clusters.map((c) => bboxOf(allPositions(c.geometry)));
   const counts = new Array(clusters.length).fill(0);
   const rawPoints: Position[][] = clusters.map(() => []);
+  const buildingHulls: Position[][][] = clusters.map(() => []);
   for (let bi = 0; bi < buildings.length; bi++) {
     const rep = buildingPoints[bi][0];
     for (let ci = 0; ci < clusters.length; ci++) {
@@ -55,6 +58,7 @@ export function findCities(
       if (pointInRings(rep, clusters[ci].geometry.coordinates)) {
         counts[ci]++;
         rawPoints[ci].push(...buildingPoints[bi]);
+        buildingHulls[ci].push(convexHull(buildingPoints[bi]));
         break;
       }
     }
@@ -67,10 +71,21 @@ export function findCities(
       polygon: featureFromLocal(ctx.frame, localPolygon as Poly),
       localPolygon: localPolygon as Poly,
       rawPointsLocal: rawPoints[i],
+      buildingHullsLocal: buildingHulls[i],
       buildingCount: counts[i],
     };
     (counts[i] >= MIN_CITY_BUILDINGS ? cities : structures).push(cluster);
   });
+
+  if (DEBUG) {
+    // Anchor each city number to coordinates, so numbers from different runs
+    // (or after OSM data changes) can be matched by location.
+    cities.forEach((c, i) => {
+      const bb = bboxOf(allPositions(c.localPolygon.geometry));
+      const [lon, lat] = fromLocal(ctx.frame, [(bb.minX + bb.maxX) / 2, (bb.minY + bb.maxY) / 2]);
+      debugLog(`City ${i + 1}: ${lat.toFixed(5)}, ${lon.toFixed(5)} — ${c.buildingCount} buildings`);
+    });
+  }
 
   const origin: Position = [0, 0]; // the query point is the local-frame origin
   const inSmallCluster = structures.some(

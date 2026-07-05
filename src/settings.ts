@@ -21,7 +21,7 @@ export interface Settings {
   fourAmotMode: FourAmotMode;
   /** Unequal measurement lines: extend the shorter, or join on the diagonal. */
   unequalLines: UnequalLines;
-  /** Non-halachic: building-fetch radius around the point, meters. */
+  /** Non-halachic: half-side of the square building-fetch area, meters. */
   fetchRadiusM: number;
 }
 
@@ -76,6 +76,47 @@ export const DEFAULT_SETTINGS: Settings = {
   unequalLines: 'extend',
   fetchRadiusM: 3000,
 };
+
+const STORAGE_KEY = 'techumin-settings';
+
+/** Per-key validation of stored values; bounds match the sidebar controls. */
+const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
+  amahPreset: (v) => typeof v === 'string' && v in AMAH_LABELS,
+  customAmahCm: (v) => typeof v === 'number' && v >= 30 && v <= 80,
+  triangleAbsorbsThird: (v) => typeof v === 'boolean',
+  chazonIshStraightSide: (v) => typeof v === 'boolean',
+  keshetExclusion: (v) => v === 'entire' || v === 'past2000',
+  remaExtra: (v) => typeof v === 'boolean',
+  fourAmotMode: (v) => v === 'each' || v === 'total',
+  unequalLines: (v) => v === 'extend' || v === 'diagonal',
+  fetchRadiusM: (v) => typeof v === 'number' && v >= 1000 && v <= 6000,
+};
+
+/** Defaults overlaid with saved preferences; invalid entries are ignored. */
+export function loadSettings(): Settings {
+  const settings = { ...DEFAULT_SETTINGS };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return settings;
+    const stored = JSON.parse(raw) as Record<string, unknown>;
+    for (const key of Object.keys(settings) as (keyof Settings)[]) {
+      if (SETTING_VALID[key](stored[key])) {
+        (settings as Record<string, unknown>)[key] = stored[key];
+      }
+    }
+  } catch {
+    // Corrupt storage — fall back to defaults.
+  }
+  return settings;
+}
+
+export function saveSettings(settings: Settings): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage unavailable (e.g. private mode) — preferences just don't persist.
+  }
+}
 
 /**
  * First pipeline step (1-based) affected by each setting; a change re-runs the

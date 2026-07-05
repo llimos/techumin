@@ -30,7 +30,8 @@ from the first step that consumes the changed setting.
 ### 1. Fetch buildings
 
 Query the Overpass API (with mirror fallback) for all `building` ways and
-relations within a configurable radius (default 3 km) of the chosen point,
+relations within a square around the chosen point (configurable, default
+3 km from the point to each edge),
 and identify the building enclosing the point, if any. A warning is shown when
 buildings reach the edge of the loaded area, since the city may extend beyond
 it.
@@ -55,8 +56,10 @@ Two phases:
   cities A, B and C, where B is within **2000 amot** of both A and C, and the
   gap between A and C is at most **282⅔ amot plus B's width** (measured along
   the A–C direction), A and C merge — B is viewed as if moved into the gap
-  between them, so it need not physically sit between them. *Configurable:*
-  whether B itself is absorbed into the merged city.
+  between them, so it need not physically sit between them. The rule does not
+  apply if the line between A and C (along their shortest gap) passes through
+  a building of a city other than B. *Configurable:* whether B itself is
+  absorbed into the merged city.
 
 ### 4. Square the city (ribua ha'ir)
 

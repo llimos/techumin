@@ -80,6 +80,61 @@ export function polygonGapUnder(a: Poly, b: Poly, limit: number): boolean {
   return false;
 }
 
+/** Closest point to p on the segment q1–q2. */
+function closestOnSeg(p: Position, q1: Position, q2: Position): Position {
+  const dx = q2[0] - q1[0];
+  const dy = q2[1] - q1[1];
+  const len2 = dx * dx + dy * dy;
+  let t = len2 === 0 ? 0 : ((p[0] - q1[0]) * dx + (p[1] - q1[1]) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return [q1[0] + t * dx, q1[1] + t * dy];
+}
+
+export interface GapLine {
+  dist: number;
+  from: Position;
+  to: Position;
+}
+
+/**
+ * The shortest line between two disjoint polygon boundaries: its length and
+ * its endpoints (`from` on a, `to` on b). Exterior rings only — for disjoint
+ * polygons the closest points always lie on exterior rings.
+ */
+export function polygonGapLine(a: Poly, b: Poly): GapLine {
+  let best: GapLine = { dist: Infinity, from: [0, 0], to: [0, 0] };
+  const consider = (p: Position, q: Position) => {
+    const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (dist < best.dist) best = { dist, from: p, to: q };
+  };
+  for (const ra of exteriorRings(a)) {
+    for (const rb of exteriorRings(b)) {
+      for (let i = 0; i < ra.length - 1; i++) {
+        for (let j = 0; j < rb.length - 1; j++) {
+          consider(ra[i], closestOnSeg(ra[i], rb[j], rb[j + 1]));
+          consider(ra[i + 1], closestOnSeg(ra[i + 1], rb[j], rb[j + 1]));
+          consider(closestOnSeg(rb[j], ra[i], ra[i + 1]), rb[j]);
+          consider(closestOnSeg(rb[j + 1], ra[i], ra[i + 1]), rb[j + 1]);
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * True when the segment p–q touches or crosses the closed ring given as an
+ * open vertex loop (e.g. a convex hull). A segment with both endpoints
+ * outside the ring passes through it iff it crosses the boundary, so this
+ * doubles as a pass-through test in that case.
+ */
+export function segmentCrossesRing(p: Position, q: Position, ring: Position[]): boolean {
+  for (let j = 0; j < ring.length; j++) {
+    if (segSegDist(p, q, ring[j], ring[(j + 1) % ring.length]) < 1e-9) return true;
+  }
+  return false;
+}
+
 export function polygonGap(a: Poly, b: Poly): number {
   let min = Infinity;
   for (const ra of rings(a)) {

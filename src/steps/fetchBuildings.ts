@@ -24,11 +24,15 @@ export async function fetchBuildings(
 ): Promise<FetchResult> {
   const { lat, lon } = ctx.point;
   const radiusM = settings.fetchRadiusM;
+  // Square fetch area: radiusM is the distance from the point to each edge.
+  const dLat = radiusM / 111320;
+  const dLon = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
+  const bbox = `${lat - dLat},${lon - dLon},${lat + dLat},${lon + dLon}`;
   const query = `
     [out:json][timeout:60];
     (
-      way["building"](around:${radiusM},${lat},${lon});
-      relation["building"](around:${radiusM},${lat},${lon});
+      way["building"](${bbox});
+      relation["building"](${bbox});
     );
     out body;
     >;
@@ -94,7 +98,7 @@ function nearFetchEdge(buildings: Poly[], center: LatLon, radiusM: number): bool
     for (const [lon, lat] of coords) {
       const dx = (lon - center.lon) * kx;
       const dy = (lat - center.lat) * ky;
-      if (Math.hypot(dx, dy) > radiusM * margin) return true;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > radiusM * margin) return true;
     }
   }
   return false;

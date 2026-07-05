@@ -3,11 +3,34 @@
 import L from 'leaflet';
 import type { LatLon } from './types';
 import type { PipelineOutputs } from './pipeline';
+import { DEBUG } from './debug';
+
+/**
+ * A scale bar in amot, reusing the stock Scale control's measuring and
+ * nice-number rounding; the amah length is set via setAmahMeters below.
+ */
+interface AmahScaleControl extends L.Control {
+  _amahM?: number;
+  _update?: () => void;
+}
+
+const AmahScale = (L.Control.Scale as any).extend({
+  _addScales(_options: unknown, className: string, container: HTMLElement) {
+    this._aScale = L.DomUtil.create('div', className, container);
+  },
+  _updateScales(maxMeters: number) {
+    if (!this._amahM || !maxMeters) return;
+    const maxAmot = maxMeters / this._amahM;
+    const amot = this._getRoundNum(maxAmot);
+    this._updateScale(this._aScale, `${amot} amot`, amot / maxAmot);
+  },
+});
 
 export class TechumMap {
   readonly map: L.Map;
   private marker: L.CircleMarker | null = null;
   private layers: Record<string, L.LayerGroup> = {};
+  private amahScale: AmahScaleControl;
 
   onPick: (point: LatLon) => void = () => {};
 
@@ -18,6 +41,8 @@ export class TechumMap {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(this.map);
     L.control.scale({ imperial: false }).addTo(this.map);
+    this.amahScale = new AmahScale() as AmahScaleControl;
+    this.amahScale.addTo(this.map);
 
     const overlays: Record<string, L.LayerGroup> = {};
     const defs: [key: string, label: string, on: boolean][] = [
@@ -28,6 +53,7 @@ export class TechumMap {
       ['shvita', 'Shvisa bounds', true],
       ['techum', 'Techum boundary', true],
     ];
+    if (DEBUG) defs.push(['cityNumbers', 'City numbers (debug)', true]);
     for (const [key, label, on] of defs) {
       const group = L.layerGroup();
       this.layers[key] = group;
@@ -39,6 +65,12 @@ export class TechumMap {
     this.map.on('click', (e: L.LeafletMouseEvent) => {
       this.onPick({ lat: e.latlng.lat, lon: e.latlng.lng });
     });
+  }
+
+  /** Set the amah length (meters) used by the amot scale bar. */
+  setAmahMeters(amahM: number): void {
+    this.amahScale._amahM = amahM;
+    this.amahScale._update?.();
   }
 
   setPoint(point: LatLon): void {
@@ -95,6 +127,22 @@ export class TechumMap {
       weight: 3,
       fillOpacity: 0.06,
     });
+
+    if (DEBUG) {
+      const group = this.layers['cityNumbers'];
+      group.clearLayers();
+      outputs.citiesResult?.cities.forEach((city, i) => {
+        const center = L.geoJSON(city.polygon).getBounds().getCenter();
+        L.marker(center, {
+          icon: L.divIcon({
+            className: 'city-debug-label',
+            html: String(i + 1),
+            iconSize: [26, 26],
+          }),
+          interactive: false,
+        }).addTo(group);
+      });
+    }
 
     if (outputs.techum) {
       this.map.fitBounds(L.geoJSON(outputs.techum).getBounds(), { padding: [24, 24] });

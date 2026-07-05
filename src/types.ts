@@ -18,6 +18,8 @@ export interface City {
   localPolygon: Poly;
   /** Raw building vertices (local frame) — exact city bounds for squaring. */
   rawPointsLocal: Position[];
+  /** Convex hull of each individual building (local frame) — undilated extents. */
+  buildingHullsLocal: Position[][];
   buildingCount: number;
 }
 
