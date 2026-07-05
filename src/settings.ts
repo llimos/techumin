@@ -4,6 +4,7 @@ export type AmahPreset = 'naeh' | 'moshe' | 'chazonIsh' | 'custom';
 export type KeshetExclusion = 'entire' | 'past2000';
 export type FourAmotMode = 'each' | 'total';
 export type UnequalLines = 'extend' | 'diagonal';
+export type TriangleWideMiddle = 'merge' | 'noMerge';
 
 export interface Settings {
   amahPreset: AmahPreset;
@@ -11,6 +12,9 @@ export interface Settings {
   customAmahCm: number;
   /** Triangle rule: is the third city itself absorbed into the merged city? */
   triangleAbsorbsThird: boolean;
+  /** Middle city wider than the gap between the outer cities: Gr"a — they
+   *  still merge; Tur/Chazon Ish — they do not. */
+  triangleWideMiddle: TriangleWideMiddle;
   /** Chazon Ish: a full-length straight side determines the squaring angle. */
   chazonIshStraightSide: boolean;
   /** Exclude the entire keshet/gam, or only where it widens past 2000 amot. */
@@ -69,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   amahPreset: 'naeh',
   customAmahCm: 48,
   triangleAbsorbsThird: true,
+  triangleWideMiddle: 'noMerge',
   chazonIshStraightSide: false,
   keshetExclusion: 'past2000',
   remaExtra: false,
@@ -84,6 +89,7 @@ const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
   amahPreset: (v) => typeof v === 'string' && v in AMAH_LABELS,
   customAmahCm: (v) => typeof v === 'number' && v >= 30 && v <= 80,
   triangleAbsorbsThird: (v) => typeof v === 'boolean',
+  triangleWideMiddle: (v) => v === 'merge' || v === 'noMerge',
   chazonIshStraightSide: (v) => typeof v === 'boolean',
   keshetExclusion: (v) => v === 'entire' || v === 'past2000',
   remaExtra: (v) => typeof v === 'boolean',
@@ -128,6 +134,7 @@ export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   amahPreset: 2,
   customAmahCm: 2,
   triangleAbsorbsThird: 3,
+  triangleWideMiddle: 3,
   chazonIshStraightSide: 4,
   keshetExclusion: 4,
   remaExtra: 4,

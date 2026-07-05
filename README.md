@@ -59,7 +59,9 @@ Two phases:
   between them, so it need not physically sit between them. The rule does not
   apply if the line between A and C (along their shortest gap) passes through
   a building of a city other than B. *Configurable:* whether B itself is
-  absorbed into the merged city.
+  absorbed into the merged city, and whether the rule still applies when B is
+  wider than the A–C gap — it merges according to the Gr"a, but not according
+  to the Tur and Chazon Ish.
 
 ### 4. Square the city (ribua ha'ir)
 
@@ -119,6 +121,7 @@ side distances.
 |---|---|---|
 | Amah length | R' Chaim Naeh 48 cm / R' Moshe Feinstein 54 cm / Chazon Ish 57.6 cm / custom | Step 2 |
 | Triangle rule: third city absorbed? | yes / no | Step 3 |
+| Triangle rule: middle city wider than the gap | does not merge (Tur, Chazon Ish) / merges (Gr"a) | Step 3 |
 | Chazon Ish straight-side squaring | off / on | Step 4 |
 | Keshet/gam exclusion extent | entire keshet / only past 2000 amot | Step 4 |
 | Rema extra 70⅔ amot | off / on | Step 4 |

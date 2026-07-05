@@ -90,7 +90,9 @@ function mergePlain(
  * (B is viewed as if moved into the gap between A and C, where its width
  * fills part of the distance). The rule only applies when the line between
  * A and C (along their shortest gap) does not pass through a building of any
- * other city besides B. A single pass over the plain-merged cities:
+ * other city besides B. Configurable: whether a B wider than the A–C gap
+ * still merges them (Gr"a) or not (Tur/Chazon Ish).
+ * A single pass over the plain-merged cities:
  * every triple is judged by the phase-1 city shapes, so one triangle merge
  * does not feed larger composite shapes into further triangle checks.
  */
@@ -182,8 +184,18 @@ function mergeTriangles(
         ok = false;
       } else {
         const line = gapLine(a, c);
-        const limit = spanBaseM + widthAlong(rawHulls[b], line.from, line.to);
-        ok = line.dist <= limit;
+        const width = widthAlong(rawHulls[b], line.from, line.to);
+        ok = line.dist <= spanBaseM + width;
+        // Tur/Chazon Ish: a middle city wider than the gap cannot be viewed
+        // as if placed between the outer cities, so they do not merge.
+        if (ok && settings.triangleWideMiddle === 'noMerge' && width > line.dist + comp) {
+          ok = false;
+          debugLog(
+            `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
+              `${labels[b]} - its width (${fmtDist(width, amah)}) exceeds the gap ` +
+              `(${fmtDist(line.dist + comp, amah)}) (Tur/Chazon Ish)`,
+          );
+        }
       }
       spanCache.set(key, ok);
     }

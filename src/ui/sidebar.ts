@@ -60,6 +60,12 @@ export class Sidebar {
         </label>
         <label><input type="checkbox" data-setting="triangleAbsorbsThird" />
           Triangle rule: third city joins the merged city</label>
+        <label>Triangle rule: middle city wider than the gap
+          <select data-setting="triangleWideMiddle">
+            <option value="noMerge">Does not merge (Tur, Chazon Ish)</option>
+            <option value="merge">Still merges (Gr&quot;a)</option>
+          </select>
+        </label>
         <label><input type="checkbox" data-setting="chazonIshStraightSide" />
           Chazon Ish: square along a full straight side</label>
         <label>Keshet/gam exclusion
