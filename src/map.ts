@@ -53,6 +53,7 @@ export class TechumMap {
       ['cities', 'Cities (raw clusters)', false],
       ['merged', 'Merged cities', true],
       ['squarings', 'Squaring (ribua)', true],
+      ['keshet', 'Keshet/gam exclusion', true],
       ['shvita', 'Shvisa bounds', true],
       ['techum', 'Techum boundary', true],
     ];
@@ -154,6 +155,12 @@ export class TechumMap {
       weight: 2,
       dashArray: '8 4',
       fillOpacity: 0.04,
+    });
+    set('keshet', outputs.squarings?.flatMap((s) => s.keshetCuts), {
+      color: '#c0392b',
+      weight: 1.5,
+      dashArray: '2 5',
+      fillOpacity: 0.15,
     });
     // With an eruv placed, the shvita/techum layers show only the eruv's, in
     // a purple scheme; the home outputs stay cached but are not drawn.

@@ -3,11 +3,12 @@
 import { booleanPointInPolygon, point as turfPoint, polygon as turfPolygon } from '@turf/turf';
 import type { Position } from 'geojson';
 import type { LatLon, PipelineContext, Poly, Shvita, Squaring } from '../types';
-import { FOUR_AMOT, amahMeters, type Settings } from '../settings';
+import { CITY_GAP_AMOT, FOUR_AMOT, amahMeters, type Settings } from '../settings';
 import { boundingRect } from '../geo/minRect';
 import { allPositions } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, toLocal } from '../geo/project';
 import { pointPolygonGap } from '../geo/gaps';
+import { pointInRings } from '../geo/dilate';
 import { debugLog } from '../debug';
 import type { FetchResult } from './fetchBuildings';
 
@@ -21,12 +22,13 @@ export function findShvita(
   const pt = turfPoint([point.lon, point.lat]);
   const localPt = toLocal(ctx.frame, [point.lon, point.lat]);
   const amah = amahMeters(settings);
+  const halfGapM = (CITY_GAP_AMOT * amah) / 2;
 
-  // Inside a city outline (with its ibur strip)? That city's squaring is the
-  // shvita — checked before the squaring rectangles, whose corners can sweep
-  // over a point that really belongs to another city.
+  // Inside a city's bounds? That city's squaring is the shvita. The bounds are
+  // the built-up cluster (gaps between its buildings included), extended by
+  // the 70⅔ strip only when the Rema karpef option is on.
   for (const sq of squarings) {
-    if (booleanPointInPolygon(pt, sq.city.polygon)) {
+    if (inCityBounds(localPt, sq.city.localPolygon, halfGapM, settings.remaExtra)) {
       debugLog(
         `Shvisa: point is inside a city (${sq.city.buildingCount} buildings) - using its squaring`,
       );
@@ -34,26 +36,14 @@ export function findShvita(
     }
   }
 
-  // Otherwise inside a squaring only (a squared-off corner region). Rectangles
-  // of different cities can overlap the point — use the nearest city's, not
-  // the first in array order.
-  let best: Squaring | null = null;
-  let bestDist = Infinity;
-  for (const sq of squarings) {
-    if (!booleanPointInPolygon(pt, sq.polygon)) continue;
-    const dist = pointPolygonGap(localPt, sq.city.localPolygon);
-    if (dist < bestDist) {
-      best = sq;
-      bestDist = dist;
-    }
-  }
-  if (best) {
-    debugLog(
-      `Shvisa: point is in a squared-off area; using the nearest city's squaring ` +
-        `(${Math.round(bestDist / amah)} amot/${Math.round(bestDist)} metres away, ` +
-        `${best.city.buildingCount} buildings)`,
+  // The ribua is a measurement construct, not the city itself — a point in a
+  // squared-off corner does not acquire city status (Mishna Eruvin 5:7: an
+  // eruv outside the ibur, even one amah, measures from where it lies).
+  if (squarings.some((sq) => booleanPointInPolygon(pt, sq.polygon))) {
+    ctx.warn(
+      "Point is within a city's squared bounds (ribua) but outside the city " +
+        'itself — the ribua does not confer city status; measuring from the point.',
     );
-    return { polygon: best.polygon, angle: best.angle, source: 'city' };
   }
 
   // Inside a building? Its North-South bounding rectangle is the shvita.
@@ -111,4 +101,27 @@ export function pointShvita(
     ]) as Poly,
   );
   return { polygon, angle: 0, source: 'point' };
+}
+
+/**
+ * Is the query point (in local coords) within the city's bounds?
+ * The cluster outline is the buildings dilated by half the 70⅔ gap, so the
+ * built-up city itself is the outline eroded by that half gap — the point is
+ * in it iff it is inside the outline and no closer than the half gap to the
+ * outline's boundary — and the Rema's 70⅔ karpef strip around the city is
+ * the outline dilated by the half gap. Hole rings are ignored: open space
+ * enclosed by the city counts as the city.
+ */
+function inCityBounds(
+  localPt: Position,
+  outline: Poly,
+  halfGapM: number,
+  remaExtra: boolean,
+): boolean {
+  const g = outline.geometry;
+  const exteriorRings =
+    g.type === 'Polygon' ? [g.coordinates[0]] : g.coordinates.map((rings) => rings[0]);
+  const inside = pointInRings(localPt, exteriorRings);
+  const boundaryGap = pointPolygonGap(localPt, outline);
+  return remaExtra ? inside || boundaryGap <= halfGapM : inside && boundaryGap >= halfGapM;
 }

@@ -6,6 +6,7 @@ import type { PipelineContext, Poly, Shvita } from '../types';
 import {
   DESCENT_LIMIT_AMOT,
   GRADIENT_THRESHOLD,
+  ROPE_AMOT,
   TECHUM_AMOT,
   amahMeters,
   type Settings,
@@ -15,8 +16,7 @@ import { minkowskiSumRect } from '../geo/minkowski';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, fromLocal } from '../geo/project';
 import { elevationAt } from '../elevation';
-
-const SAMPLE_STEP_M = 30;
+import { debugLog } from '../debug';
 
 export async function measureTechum(
   ctx: PipelineContext,
@@ -26,6 +26,7 @@ export async function measureTechum(
   const amah = amahMeters(settings);
   const techumM = TECHUM_AMOT * amah;
   const descentLimitM = DESCENT_LIMIT_AMOT * amah;
+  const stepM = ROPE_AMOT * amah;
 
   const local = featureToLocal(ctx.frame, shvita.polygon);
   const rot = rotateFeature(local, -shvita.angle);
@@ -36,7 +37,7 @@ export async function measureTechum(
   // Eight rays: two outward axis directions from each corner of the shvita.
   let missingElevation = false;
   const ray = async (x: number, y: number, dir: Position): Promise<number> => {
-    const r = await measureRay(ctx, shvita.angle, [x, y], dir, techumM, descentLimitM);
+    const r = await measureRay(ctx, shvita.angle, [x, y], dir, techumM, descentLimitM, stepM);
     if (r.missingData) missingElevation = true;
     return r.distance;
   };
@@ -53,6 +54,21 @@ export async function measureTechum(
   if (missingElevation) {
     ctx.warn('Elevation data unavailable for part of the measurement — those lines were measured flat.');
   }
+  const rays: [string, number, number][] = [
+    ['N', dNw, dNe],
+    ['S', dSw, dSe],
+    ['W', dWs, dWn],
+    ['E', dEs, dEn],
+  ];
+  debugLog(
+    `Techum rays, m of ${techumM.toFixed(1)} budget (gradient-rule shortfall in parens): ` +
+      rays
+        .map(
+          ([dir, a, b]) =>
+            `${dir} ${a.toFixed(1)} (−${(techumM - a).toFixed(1)}) / ${b.toFixed(1)} (−${(techumM - b).toFixed(1)})`,
+        )
+        .join(', '),
+  );
 
   const dW = Math.max(dWs, dWn);
   const dE = Math.max(dEs, dEn);
@@ -68,23 +84,31 @@ export async function measureTechum(
     // exclusion runs deeper than the measured distance.
     techumRot = minkowskiSumRect(rot, dW, dE, dS, dN);
   } else {
-    // Join on the diagonal: each side is the segment between its own two
-    // measured endpoints (a trapezoid edge when they differ), and adjacent
-    // sides are joined endpoint-to-endpoint across each corner, so the
-    // corners are cut diagonally rather than squared out.
-    techumRot = turfPolygon([
-      [
-        [minX, maxY + dNw], // north ray from NW
-        [maxX, maxY + dNe], // north ray from NE
-        [maxX + dEn, maxY], // east ray from NE
-        [maxX + dEs, minY], // east ray from SE
-        [maxX, minY - dSe], // south ray from SE
-        [minX, minY - dSw], // south ray from SW
-        [minX - dWs, minY], // west ray from SW
-        [minX - dWn, maxY], // west ray from NW
-        [minX, maxY + dNw],
-      ],
-    ]) as Poly;
+    // Join on the diagonal: each side runs between its own two measured ray
+    // endpoints — a diagonal edge when terrain leaves them unequal — instead
+    // of extending the shorter line to the longer. Corners are still squared
+    // out by extending the side lines to their intersections.
+    const north: Line = [
+      [minX, maxY + dNw],
+      [maxX, maxY + dNe],
+    ];
+    const east: Line = [
+      [maxX + dEn, maxY],
+      [maxX + dEs, minY],
+    ];
+    const south: Line = [
+      [maxX, minY - dSe],
+      [minX, minY - dSw],
+    ];
+    const west: Line = [
+      [minX - dWs, minY],
+      [minX - dWn, maxY],
+    ];
+    const nw = lineIntersection(west, north);
+    const ne = lineIntersection(north, east);
+    const se = lineIntersection(east, south);
+    const sw = lineIntersection(south, west);
+    techumRot = turfPolygon([[nw, ne, se, sw, nw]]) as Poly;
   }
 
   // A keshet-excluded squaring indents the techum where the exclusion runs
@@ -114,6 +138,17 @@ export async function measureTechum(
   return featureFromLocal(ctx.frame, rotateFeature(techumRot, shvita.angle));
 }
 
+type Line = [Position, Position];
+
+/** Intersection of the infinite lines through segments a and b. */
+function lineIntersection(a: Line, b: Line): Position {
+  const [[x1, y1], [x2, y2]] = a;
+  const [[x3, y3], [x4, y4]] = b;
+  const denom = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+  const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / denom;
+  return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)];
+}
+
 interface RayResult {
   /** Horizontal reach in meters. */
   distance: number;
@@ -121,10 +156,11 @@ interface RayResult {
 }
 
 /**
- * Walk outward sampling the terrain; a segment costs its surface length when
- * the grade is shallow (< 1:3.6), its horizontal length when steep — unless
- * the walk has descended more than 2000 amot below the start, in which case
- * even steep ground is measured along the surface.
+ * Walk outward in rope-length (50 amot) steps sampling the terrain; a segment
+ * costs its surface length when the grade is shallow (< 1:3.6), its
+ * horizontal length when steep — unless the walk has descended more than
+ * 2000 amot below the start, in which case even steep ground is measured
+ * along the surface.
  */
 async function measureRay(
   ctx: PipelineContext,
@@ -133,6 +169,7 @@ async function measureRay(
   dirRot: Position,
   budgetM: number,
   descentLimitM: number,
+  stepM: number,
 ): Promise<RayResult> {
   const toLatLon = (p: Position): Position => {
     const localP = rotatePoint(p, angle);
@@ -150,24 +187,24 @@ async function measureRay(
   let horizontal = 0;
   let prevElev = startElev;
   while (spent < budgetM) {
-    const nextH = horizontal + SAMPLE_STEP_M;
+    const nextH = horizontal + stepM;
     const p: Position = [originRot[0] + dirRot[0] * nextH, originRot[1] + dirRot[1] * nextH];
     const [lon, lat] = toLatLon(p);
     const elev = await elevationAt(lat, lon);
     let cost: number;
     if (elev === null) {
       missingData = true;
-      cost = SAMPLE_STEP_M;
+      cost = stepM;
     } else {
       const dh = elev - prevElev;
-      const grade = Math.abs(dh) / SAMPLE_STEP_M;
-      const surface = Math.hypot(SAMPLE_STEP_M, dh);
+      const grade = Math.abs(dh) / stepM;
+      const surface = Math.hypot(stepM, dh);
       const deepDescent = dh < 0 && startElev - elev > descentLimitM;
-      cost = grade < GRADIENT_THRESHOLD || deepDescent ? surface : SAMPLE_STEP_M;
+      cost = grade < GRADIENT_THRESHOLD || deepDescent ? surface : stepM;
       prevElev = elev;
     }
     if (spent + cost >= budgetM) {
-      horizontal += ((budgetM - spent) / cost) * SAMPLE_STEP_M;
+      horizontal += ((budgetM - spent) / cost) * stepM;
       spent = budgetM;
     } else {
       spent += cost;

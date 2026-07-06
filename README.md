@@ -17,9 +17,9 @@ AWS Terrain Tiles) directly.
 Click anywhere on the map (or search for an address, or use your location) to
 set the point. The sidebar lets you choose between halachic opinions; changing
 an opinion recalculates only from the first affected step. Intermediate
-results (buildings, city clusters, merged cities, squarings, shvita bounds)
-can be toggled as map layers, and each step logs its timing and output to the
-browser console.
+results (buildings, city clusters, merged cities, squarings, keshet/gam
+exclusions, shvita bounds) can be toggled as map layers, and each step logs
+its timing and output to the browser console.
 
 ## Calculation steps
 
@@ -80,19 +80,26 @@ the recorded angle. Then:
 
 - **Keshet/gam exclusion:** a concave region is measured along its true chord
   — the segment between the two horns of the bow, at whatever angle it runs.
-  If the chord spans at least **4000 amot** and the region runs deeper than
-  **2000 amot** perpendicular to the chord before reaching the city, it is
-  excluded from the squaring. *Configurable:* exclude the entire keshet, or
-  only the part where its width (parallel to the chord) exceeds 2000 amot.
+  A region whose chord spans at least **4000 amot** is excluded from the
+  squaring; *configurable:* whether the exclusion also requires the region to
+  run deeper than **2000 amot** perpendicular to the chord before reaching
+  the city. *Configurable:* exclude only the part where the keshet's width
+  (parallel to the chord) still exceeds **4000 amot** — where the arms close
+  within 4000 amot the hollow is treated as filled again — or exclude the
+  entire keshet.
 - **Rema extra** (*configurable*): add an extra 70⅔ amot around the squaring.
 
 ### 5. Shvita bounds
 
 Determine the area from which the techum is measured:
 
-- Point inside a city → that city's squaring (and its angle).
-- Otherwise, point inside a squaring (a squared-off corner region) → that
-  squaring; if squarings of several cities overlap there, the nearest city's.
+- Point inside a city → that city's squaring (and its angle). The city bounds
+  are the built-up cluster — gaps between its buildings included, but with no
+  strip beyond the outermost buildings — extended by the **70⅔ amot** karpef
+  strip when the Rema option is on. The squared-off corners of the ribua do
+  **not** confer city status: the ribua is a measurement construct, not the
+  city itself (an eruv outside the ibur, even one amah, measures from where
+  it lies) — a point there falls to the cases below, with a warning.
 - Otherwise, point inside a building → the building's north–south bounding
   rectangle.
 - Otherwise → a square of 4 amot around the point. *Configurable:* 4 amot in
@@ -102,7 +109,8 @@ Determine the area from which the techum is measured:
 
 From each corner of the shvita bounds, measure **2000 amot** outward in the
 two axis directions of the recorded angle. Each ray is measured with the
-gradient rule, using elevation data sampled along the way:
+gradient rule, using elevation data sampled every **50 amot** (a rope length)
+along the way:
 
 - Ground with a slope shallower than **1:3.6** is measured along the surface.
 - Steeper ground is measured as the crow flies — unless it descends and ends
@@ -137,7 +145,8 @@ cached, so removing the eruv restores it instantly.
 | Triangle rule: third city absorbed? | yes / no | Step 3 |
 | Triangle rule: middle city wider than the gap | does not merge (Tur, Chazon Ish) / merges (Gr"a) | Step 3 |
 | Chazon Ish straight-side squaring | off / on | Step 4 |
-| Keshet/gam exclusion extent | entire keshet / only past 2000 amot | Step 4 |
+| Keshet/gam condition | mouth ≥ 4000 and depth > 2000 amot / mouth ≥ 4000 alone | Step 4 |
+| Keshet/gam exclusion extent | only wider than 4000 amot / entire keshet | Step 4 |
 | Rema extra 70⅔ amot | off / on | Step 4 |
 | No-structure fallback | 4 amot each direction / 4 amot total | Step 5 |
 | Unequal measurement lines | extend shorter / join on diagonal | Step 6 |
@@ -156,6 +165,9 @@ cached, so removing the eruv restores it instantly.
 
 - City shapes are only as good as OSM building coverage in the area.
 - Measurement lines are straight; obstacles, water and karpef are ignored.
+- No havla'ah: for a point outside any city, a city inside the measured techum
+  is not reduced to 4 amot, and the techum is not truncated where the measure
+  ends in the middle of a city.
 - Keshet/gam and oblong detection use geometric tolerances, not psak-grade
   judgment.
 - Terrain inside a keshet indentation is not measured separately — the four

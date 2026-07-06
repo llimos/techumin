@@ -81,10 +81,16 @@ export class Sidebar {
         </label>
         <label><input type="checkbox" data-setting="chazonIshStraightSide" />
           Chazon Ish: square along a full straight side</label>
+        <label>Keshet/gam condition
+          <select data-setting="keshetCondition">
+            <option value="mouthAndDepth">Mouth ≥ 4000 and depth &gt; 2000 amot</option>
+            <option value="mouthOnly">Mouth ≥ 4000 amot alone</option>
+          </select>
+        </label>
         <label>Keshet/gam exclusion
           <select data-setting="keshetExclusion">
+            <option value="past4000">Exclude only wider than 4000 amot</option>
             <option value="entire">Exclude entire keshet</option>
-            <option value="past2000">Exclude only wider than 2000 amot</option>
           </select>
         </label>
         <label><input type="checkbox" data-setting="remaExtra" />

@@ -5,6 +5,7 @@ import { TechumMap } from './map';
 import { Sidebar } from './ui/sidebar';
 import { TechumPipeline, type PipelineOutputs } from './pipeline';
 import { amahMeters, loadSettings, saveSettings } from './settings';
+import { DEBUG } from './debug';
 import type { LatLon, Poly } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -183,6 +184,7 @@ function refreshEruvUi(): void {
 
 pipeline.onUpdate = ({ outputs, warnings, running, stage, error }) => {
   lastOutputs = outputs;
+  if (DEBUG) (window as unknown as Record<string, unknown>).__techumOutputs = outputs;
   map.render(outputs);
   sidebar.setWarnings(warnings);
   overlay.hidden = !running;

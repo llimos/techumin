@@ -27,6 +27,8 @@ export interface Squaring {
   city: City;
   /** Squaring polygon (rectangle, possibly minus keshet exclusions), geographic. */
   polygon: Poly;
+  /** Keshet/gam regions excluded from the squaring, geographic — for display. */
+  keshetCuts: Poly[];
   /** CCW radians from North-South alignment. */
   angle: number;
   /** True when the polygon is exactly its bounding rectangle (no keshet cut). */
