@@ -6,6 +6,7 @@ import type { PipelineContext, Poly, Shvita } from '../types';
 import {
   DESCENT_LIMIT_AMOT,
   GRADIENT_THRESHOLD,
+  ROPE_AMOT,
   TECHUM_AMOT,
   amahMeters,
   type Settings,
@@ -17,8 +18,6 @@ import { featureFromLocal, featureToLocal, fromLocal } from '../geo/project';
 import { elevationAt } from '../elevation';
 import { debugLog } from '../debug';
 
-const SAMPLE_STEP_M = 30;
-
 export async function measureTechum(
   ctx: PipelineContext,
   settings: Settings,
@@ -27,6 +26,7 @@ export async function measureTechum(
   const amah = amahMeters(settings);
   const techumM = TECHUM_AMOT * amah;
   const descentLimitM = DESCENT_LIMIT_AMOT * amah;
+  const stepM = ROPE_AMOT * amah;
 
   const local = featureToLocal(ctx.frame, shvita.polygon);
   const rot = rotateFeature(local, -shvita.angle);
@@ -37,7 +37,7 @@ export async function measureTechum(
   // Eight rays: two outward axis directions from each corner of the shvita.
   let missingElevation = false;
   const ray = async (x: number, y: number, dir: Position): Promise<number> => {
-    const r = await measureRay(ctx, shvita.angle, [x, y], dir, techumM, descentLimitM);
+    const r = await measureRay(ctx, shvita.angle, [x, y], dir, techumM, descentLimitM, stepM);
     if (r.missingData) missingElevation = true;
     return r.distance;
   };
@@ -156,10 +156,11 @@ interface RayResult {
 }
 
 /**
- * Walk outward sampling the terrain; a segment costs its surface length when
- * the grade is shallow (< 1:3.6), its horizontal length when steep — unless
- * the walk has descended more than 2000 amot below the start, in which case
- * even steep ground is measured along the surface.
+ * Walk outward in rope-length (50 amot) steps sampling the terrain; a segment
+ * costs its surface length when the grade is shallow (< 1:3.6), its
+ * horizontal length when steep — unless the walk has descended more than
+ * 2000 amot below the start, in which case even steep ground is measured
+ * along the surface.
  */
 async function measureRay(
   ctx: PipelineContext,
@@ -168,6 +169,7 @@ async function measureRay(
   dirRot: Position,
   budgetM: number,
   descentLimitM: number,
+  stepM: number,
 ): Promise<RayResult> {
   const toLatLon = (p: Position): Position => {
     const localP = rotatePoint(p, angle);
@@ -185,24 +187,24 @@ async function measureRay(
   let horizontal = 0;
   let prevElev = startElev;
   while (spent < budgetM) {
-    const nextH = horizontal + SAMPLE_STEP_M;
+    const nextH = horizontal + stepM;
     const p: Position = [originRot[0] + dirRot[0] * nextH, originRot[1] + dirRot[1] * nextH];
     const [lon, lat] = toLatLon(p);
     const elev = await elevationAt(lat, lon);
     let cost: number;
     if (elev === null) {
       missingData = true;
-      cost = SAMPLE_STEP_M;
+      cost = stepM;
     } else {
       const dh = elev - prevElev;
-      const grade = Math.abs(dh) / SAMPLE_STEP_M;
-      const surface = Math.hypot(SAMPLE_STEP_M, dh);
+      const grade = Math.abs(dh) / stepM;
+      const surface = Math.hypot(stepM, dh);
       const deepDescent = dh < 0 && startElev - elev > descentLimitM;
-      cost = grade < GRADIENT_THRESHOLD || deepDescent ? surface : SAMPLE_STEP_M;
+      cost = grade < GRADIENT_THRESHOLD || deepDescent ? surface : stepM;
       prevElev = elev;
     }
     if (spent + cost >= budgetM) {
-      horizontal += ((budgetM - spent) / cost) * SAMPLE_STEP_M;
+      horizontal += ((budgetM - spent) / cost) * stepM;
       spent = budgetM;
     } else {
       spent += cost;

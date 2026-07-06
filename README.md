@@ -105,7 +105,8 @@ Determine the area from which the techum is measured:
 
 From each corner of the shvita bounds, measure **2000 amot** outward in the
 two axis directions of the recorded angle. Each ray is measured with the
-gradient rule, using elevation data sampled along the way:
+gradient rule, using elevation data sampled every **50 amot** (a rope length)
+along the way:
 
 - Ground with a slope shallower than **1:3.6** is measured along the surface.
 - Steeper ground is measured as the crow flies — unless it descends and ends

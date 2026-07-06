@@ -72,6 +72,8 @@ export const DESCENT_LIMIT_AMOT = 2000;
 export const MIN_CITY_BUILDINGS = 6;
 /** Ground steeper than this rise/run is measured as the crow flies. */
 export const GRADIENT_THRESHOLD = 1 / 3.6;
+/** Measuring-rope length: the gradient is sampled at this interval. */
+export const ROPE_AMOT = 50;
 
 export const DEFAULT_SETTINGS: Settings = {
   amahPreset: 'naeh',
