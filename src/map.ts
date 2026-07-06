@@ -3,6 +3,7 @@
 import L from 'leaflet';
 import type { LatLon, Poly } from './types';
 import type { PipelineOutputs } from './pipeline';
+import { MeasureTool } from './ui/measure';
 import { DEBUG } from './debug';
 
 /**
@@ -34,6 +35,7 @@ export class TechumMap {
   /** Highlight of the area where an eruv may be placed (not in the control). */
   private eruvZone: L.LayerGroup;
   private amahScale: AmahScaleControl;
+  private measure: MeasureTool;
 
   onPick: (point: LatLon) => void = () => {};
 
@@ -46,6 +48,7 @@ export class TechumMap {
     L.control.scale({ imperial: false }).addTo(this.map);
     this.amahScale = new AmahScale() as AmahScaleControl;
     this.amahScale.addTo(this.map);
+    this.measure = new MeasureTool(this.map);
 
     const overlays: Record<string, L.LayerGroup> = {};
     const defs: [key: string, label: string, on: boolean][] = [
@@ -68,14 +71,16 @@ export class TechumMap {
     this.eruvZone = L.layerGroup().addTo(this.map);
 
     this.map.on('click', (e: L.LeafletMouseEvent) => {
+      if (this.measure.active) return;
       this.onPick({ lat: e.latlng.lat, lon: e.latlng.lng });
     });
   }
 
-  /** Set the amah length (meters) used by the amot scale bar. */
+  /** Set the amah length (meters) used by the amot scale bar and measure tool. */
   setAmahMeters(amahM: number): void {
     this.amahScale._amahM = amahM;
     this.amahScale._update?.();
+    this.measure.setAmahMeters(amahM);
   }
 
   setPoint(point: LatLon): void {

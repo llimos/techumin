@@ -170,6 +170,29 @@ body,
   margin-left: -18px;
 }
 
+.measure-toggle svg {
+  vertical-align: middle;
+}
+
+.measure-toggle.measure-active {
+  background: #16a085;
+  color: #fff;
+}
+
+.measure-toggle.measure-active:hover {
+  background: #128f76;
+  color: #fff;
+}
+
+#map.measuring {
+  cursor: crosshair;
+}
+
+.measure-label {
+  font-weight: 600;
+  color: #0e6655;
+}
+
 #eruv-btn {
   display: block;
   width: 100%;
