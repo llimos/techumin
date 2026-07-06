@@ -15,6 +15,7 @@ import { minkowskiSumRect } from '../geo/minkowski';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, fromLocal } from '../geo/project';
 import { elevationAt } from '../elevation';
+import { debugLog } from '../debug';
 
 const SAMPLE_STEP_M = 30;
 
@@ -53,6 +54,21 @@ export async function measureTechum(
   if (missingElevation) {
     ctx.warn('Elevation data unavailable for part of the measurement — those lines were measured flat.');
   }
+  const rays: [string, number, number][] = [
+    ['N', dNw, dNe],
+    ['S', dSw, dSe],
+    ['W', dWs, dWn],
+    ['E', dEs, dEn],
+  ];
+  debugLog(
+    `Techum rays, m of ${techumM.toFixed(1)} budget (gradient-rule shortfall in parens): ` +
+      rays
+        .map(
+          ([dir, a, b]) =>
+            `${dir} ${a.toFixed(1)} (−${(techumM - a).toFixed(1)}) / ${b.toFixed(1)} (−${(techumM - b).toFixed(1)})`,
+        )
+        .join(', '),
+  );
 
   const dW = Math.max(dWs, dWn);
   const dE = Math.max(dEs, dEn);
@@ -68,23 +84,31 @@ export async function measureTechum(
     // exclusion runs deeper than the measured distance.
     techumRot = minkowskiSumRect(rot, dW, dE, dS, dN);
   } else {
-    // Join on the diagonal: each side is the segment between its own two
-    // measured endpoints (a trapezoid edge when they differ), and adjacent
-    // sides are joined endpoint-to-endpoint across each corner, so the
-    // corners are cut diagonally rather than squared out.
-    techumRot = turfPolygon([
-      [
-        [minX, maxY + dNw], // north ray from NW
-        [maxX, maxY + dNe], // north ray from NE
-        [maxX + dEn, maxY], // east ray from NE
-        [maxX + dEs, minY], // east ray from SE
-        [maxX, minY - dSe], // south ray from SE
-        [minX, minY - dSw], // south ray from SW
-        [minX - dWs, minY], // west ray from SW
-        [minX - dWn, maxY], // west ray from NW
-        [minX, maxY + dNw],
-      ],
-    ]) as Poly;
+    // Join on the diagonal: each side runs between its own two measured ray
+    // endpoints — a diagonal edge when terrain leaves them unequal — instead
+    // of extending the shorter line to the longer. Corners are still squared
+    // out by extending the side lines to their intersections.
+    const north: Line = [
+      [minX, maxY + dNw],
+      [maxX, maxY + dNe],
+    ];
+    const east: Line = [
+      [maxX + dEn, maxY],
+      [maxX + dEs, minY],
+    ];
+    const south: Line = [
+      [maxX, minY - dSe],
+      [minX, minY - dSw],
+    ];
+    const west: Line = [
+      [minX - dWs, minY],
+      [minX - dWn, maxY],
+    ];
+    const nw = lineIntersection(west, north);
+    const ne = lineIntersection(north, east);
+    const se = lineIntersection(east, south);
+    const sw = lineIntersection(south, west);
+    techumRot = turfPolygon([[nw, ne, se, sw, nw]]) as Poly;
   }
 
   // A keshet-excluded squaring indents the techum where the exclusion runs
@@ -112,6 +136,17 @@ export async function measureTechum(
   }
 
   return featureFromLocal(ctx.frame, rotateFeature(techumRot, shvita.angle));
+}
+
+type Line = [Position, Position];
+
+/** Intersection of the infinite lines through segments a and b. */
+function lineIntersection(a: Line, b: Line): Position {
+  const [[x1, y1], [x2, y2]] = a;
+  const [[x3, y3], [x4, y4]] = b;
+  const denom = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
+  const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / denom;
+  return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)];
 }
 
 interface RayResult {

@@ -4,6 +4,7 @@ import { TechumMap } from './map';
 import { Sidebar } from './ui/sidebar';
 import { TechumPipeline } from './pipeline';
 import { amahMeters, loadSettings, saveSettings } from './settings';
+import { DEBUG } from './debug';
 import type { LatLon } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -51,6 +52,7 @@ function pick(point: LatLon): void {
 }
 
 pipeline.onUpdate = ({ outputs, warnings, running, stage, error }) => {
+  if (DEBUG) (window as unknown as Record<string, unknown>).__techumOutputs = outputs;
   map.render(outputs);
   sidebar.setWarnings(warnings);
   overlay.hidden = !running;
