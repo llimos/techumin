@@ -93,9 +93,13 @@ the recorded angle. Then:
 
 Determine the area from which the techum is measured:
 
-- Point inside a city → that city's squaring (and its angle).
-- Otherwise, point inside a squaring (a squared-off corner region) → that
-  squaring; if squarings of several cities overlap there, the nearest city's.
+- Point inside a city → that city's squaring (and its angle). The city bounds
+  are the built-up cluster — gaps between its buildings included, but with no
+  strip beyond the outermost buildings — extended by the **70⅔ amot** karpef
+  strip when the Rema option is on. The squared-off corners of the ribua do
+  **not** confer city status: the ribua is a measurement construct, not the
+  city itself (an eruv outside the ibur, even one amah, measures from where
+  it lies) — a point there falls to the cases below, with a warning.
 - Otherwise, point inside a building → the building's north–south bounding
   rectangle.
 - Otherwise → a square of 4 amot around the point. *Configurable:* 4 amot in
@@ -148,6 +152,9 @@ side distances.
 
 - City shapes are only as good as OSM building coverage in the area.
 - Measurement lines are straight; obstacles, water and karpef are ignored.
+- No havla'ah: for a point outside any city, a city inside the measured techum
+  is not reduced to 4 amot, and the techum is not truncated where the measure
+  ends in the middle of a city.
 - Keshet/gam and oblong detection use geometric tolerances, not psak-grade
   judgment.
 - Terrain inside a keshet indentation is not measured separately — the four
