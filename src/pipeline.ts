@@ -1,8 +1,11 @@
 /**
- * Runs the six calculation steps, caching each output. A settings change
- * re-runs only from the first affected step; a new point re-runs everything.
+ * Runs the calculation steps, caching each output. A settings change re-runs
+ * only from the first affected step; a new point re-runs everything. Steps
+ * 7-8 repeat the shvita/techum steps measured from an eruv techumin, when one
+ * is set; the home outputs stay cached so removing the eruv is instant.
  */
 
+import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
 import type { City, LatLon, PipelineContext, Poly, Shvita, Squaring } from './types';
 import { SETTING_FIRST_STEP, type Settings } from './settings';
 import { makeFrame } from './geo/project';
@@ -10,7 +13,7 @@ import { fetchBuildings, type FetchResult } from './steps/fetchBuildings';
 import { findCities, type CitiesResult } from './steps/findCities';
 import { mergeCities } from './steps/mergeCities';
 import { squareCities } from './steps/squareCity';
-import { findShvita } from './steps/findShvita';
+import { findShvita, pointShvita } from './steps/findShvita';
 import { measureTechum } from './steps/measureTechum';
 
 export interface PipelineOutputs {
@@ -20,6 +23,8 @@ export interface PipelineOutputs {
   squarings?: Squaring[];
   shvita?: Shvita;
   techum?: Poly;
+  eruvShvita?: Shvita;
+  eruvTechum?: Poly;
 }
 
 export interface PipelineUpdate {
@@ -38,6 +43,8 @@ const STEP_NAMES = [
   '4 squareCities',
   '5 findShvita',
   '6 measureTechum',
+  '7 findShvita (eruv)',
+  '8 measureTechum (eruv)',
 ];
 
 const STAGE_LABELS = [
@@ -47,6 +54,8 @@ const STAGE_LABELS = [
   'Squaring the cities',
   'Finding the shvisa bounds',
   'Measuring the techum',
+  'Finding the eruv shvisa bounds',
+  'Measuring the eruv techum',
 ];
 
 /**
@@ -69,10 +78,13 @@ const nextPaint = (): Promise<void> =>
 
 export class TechumPipeline {
   private point: LatLon | null = null;
+  private eruvPoint: LatLon | null = null;
   private settings: Settings;
   private outputs: PipelineOutputs = {};
   /** Warnings collected per step, so partial re-runs keep earlier warnings. */
-  private stepWarnings: string[][] = [[], [], [], [], [], []];
+  private stepWarnings: string[][] = [[], [], [], [], [], [], [], []];
+  /** Techum from a 4-amot shvita at the start point; cached per home run. */
+  private personalZoneCache: Promise<Poly> | null = null;
   private runToken = 0;
   private stage?: string;
 
@@ -88,7 +100,56 @@ export class TechumPipeline {
 
   setPoint(point: LatLon): void {
     this.point = point;
+    this.eruvPoint = null;
+    this.personalZoneCache = null;
     void this.run(1);
+  }
+
+  /** Set the eruv techumin point; steps 7-8 measure the techum from it. */
+  setEruv(point: LatLon): void {
+    this.eruvPoint = point;
+    void this.run(7);
+  }
+
+  /** Remove the eruv; the cached home techum shows again with no recompute. */
+  clearEruv(): void {
+    this.eruvPoint = null;
+    this.outputs.eruvShvita = undefined;
+    this.outputs.eruvTechum = undefined;
+    this.stepWarnings[6] = [];
+    this.stepWarnings[7] = [];
+    this.emit(this.stage !== undefined);
+  }
+
+  /**
+   * The area where an eruv techumin may be placed, per the current setting:
+   * the whole city's techum, or only the techum measured from the start point
+   * itself. Undefined until a techum has been computed.
+   */
+  async getPlacementZone(): Promise<Poly | undefined> {
+    if (!this.point || !this.outputs.techum) return undefined;
+    return this.settings.eruvCityTechum ? this.outputs.techum : this.personalZone();
+  }
+
+  /** Requires outputs.techum; see getPlacementZone. */
+  private personalZone(): Promise<Poly> {
+    const o = this.outputs;
+    if (o.shvita?.source === 'point') return Promise.resolve(o.techum!);
+    if (!this.personalZoneCache) {
+      const point = this.point!;
+      const ctx: PipelineContext = {
+        point,
+        frame: makeFrame(point.lat, point.lon),
+        warnings: [],
+        warn: () => {},
+      };
+      this.personalZoneCache = measureTechum(
+        ctx,
+        this.settings,
+        pointShvita(ctx, this.settings, [0, 0]),
+      );
+    }
+    return this.personalZoneCache;
   }
 
   updateSettings(partial: Partial<Settings>): void {
@@ -110,7 +171,8 @@ export class TechumPipeline {
     if (!o.merged) return 3;
     if (!o.squarings) return 4;
     if (!o.shvita) return 5;
-    return 6;
+    if (!o.techum) return 6;
+    return 7;
   }
 
   private async run(fromStep: number): Promise<void> {
@@ -125,18 +187,27 @@ export class TechumPipeline {
       warn: (m) => ctx.warnings.push(m),
     };
 
-    // Drop stale outputs and warnings from the re-run steps onward.
+    // Drop stale outputs and warnings from the re-run steps onward. The eruv
+    // outputs are always recomputed when the run reaches them (same policy as
+    // the techum before the eruv steps existed).
     const o = this.outputs;
     if (fromStep <= 1) o.fetched = undefined;
     if (fromStep <= 2) o.citiesResult = undefined;
     if (fromStep <= 3) o.merged = undefined;
     if (fromStep <= 4) o.squarings = undefined;
     if (fromStep <= 5) o.shvita = undefined;
-    o.techum = undefined;
-    for (let i = fromStep - 1; i < 6; i++) this.stepWarnings[i] = [];
+    if (fromStep <= 6) {
+      o.techum = undefined;
+      this.personalZoneCache = null;
+    }
+    o.eruvShvita = undefined;
+    o.eruvTechum = undefined;
+    for (let i = fromStep - 1; i < 8; i++) this.stepWarnings[i] = [];
 
+    // Re-evaluated per iteration: clearing the eruv mid-run ends the run at 6.
+    const lastStep = () => (this.eruvPoint ? 8 : 6);
     try {
-      for (let step = fromStep; step <= 6; step++) {
+      for (let step = fromStep; step <= lastStep(); step++) {
         this.stage = STAGE_LABELS[step - 1];
         this.emit(true);
         await nextPaint(); // let the stage popup show before a blocking step
@@ -151,8 +222,8 @@ export class TechumPipeline {
           this.stepOutput(step),
           ctx.warnings.length ? { warnings: ctx.warnings } : '',
         );
-        if (step === 6) this.stage = undefined;
-        this.emit(step < 6);
+        if (step === lastStep()) this.stage = undefined;
+        this.emit(step < lastStep());
       }
     } catch (err) {
       if (token !== this.runToken) return;
@@ -183,12 +254,34 @@ export class TechumPipeline {
       case 6:
         o.techum = await measureTechum(ctx, this.settings, o.shvita!);
         break;
+      case 7: {
+        const eruv = this.eruvPoint!;
+        const eruvPt = turfPoint([eruv.lon, eruv.lat]);
+        const zone = await this.getPlacementZone();
+        if (zone && !booleanPointInPolygon(eruvPt, zone)) {
+          ctx.warn('The eruv is outside the area where an eruv may be placed — the eruv is invalid.');
+        } else if (
+          this.settings.eruvCityTechum &&
+          !booleanPointInPolygon(eruvPt, await this.personalZone())
+        ) {
+          ctx.warn(
+            'The eruv is more than 2000 amot from the start point — ' +
+              'most poskim do not allow returning to the start point.',
+          );
+        }
+        const eruvCtx: PipelineContext = { ...ctx, warn: (m) => ctx.warn(`Eruv: ${m}`) };
+        o.eruvShvita = findShvita(eruvCtx, this.settings, o.fetched!, o.squarings!, eruv);
+        break;
+      }
+      case 8:
+        o.eruvTechum = await measureTechum(ctx, this.settings, o.eruvShvita!);
+        break;
     }
   }
 
   private stepOutput(step: number): unknown {
     const o = this.outputs;
-    return [o.fetched, o.citiesResult, o.merged, o.squarings, o.shvita, o.techum][step - 1];
+    return [o.fetched, o.citiesResult, o.merged, o.squarings, o.shvita, o.techum, o.eruvShvita, o.eruvTechum][step - 1];
   }
 
   private emit(running: boolean, error?: string): void {
