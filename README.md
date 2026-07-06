@@ -17,9 +17,9 @@ AWS Terrain Tiles) directly.
 Click anywhere on the map (or search for an address, or use your location) to
 set the point. The sidebar lets you choose between halachic opinions; changing
 an opinion recalculates only from the first affected step. Intermediate
-results (buildings, city clusters, merged cities, squarings, shvita bounds)
-can be toggled as map layers, and each step logs its timing and output to the
-browser console.
+results (buildings, city clusters, merged cities, squarings, keshet/gam
+exclusions, shvita bounds) can be toggled as map layers, and each step logs
+its timing and output to the browser console.
 
 ## Calculation steps
 

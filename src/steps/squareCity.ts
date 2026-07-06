@@ -65,6 +65,7 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   const [maxX, maxY] = rectRot.corners[2];
   let squaringRot: Poly = rectPoly(minX, minY, maxX, maxY);
   let isRectangle = true;
+  const keshetCutsRot: Poly[] = [];
 
   // 3. Keshet/gam exclusion — only worth analyzing for the city the query
   // point belongs to (the local-frame origin), and against the gap-filled
@@ -82,6 +83,7 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
       if (next) {
         squaringRot = next as Poly;
         isRectangle = false;
+        keshetCutsRot.push(cut);
         ctx.warn(
           'Keshet/gam detected: part of the squaring is excluded ' +
             (settings.keshetExclusion === 'entire'
@@ -106,7 +108,10 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
     polygon = (buffer(polygon, remaM / 1000, { units: 'kilometers' }) as Poly) ?? polygon;
   }
 
-  return { city, polygon, angle, isRectangle };
+  const keshetCuts = keshetCutsRot.map((cut) =>
+    featureFromLocal(ctx.frame, rotateFeature(cut, angle)),
+  );
+  return { city, polygon, keshetCuts, angle, isRectangle };
 }
 
 /** Keep angles in [-45°, 45°): a rectangle's orientation is symmetric mod 90°. */
