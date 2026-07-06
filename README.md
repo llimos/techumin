@@ -80,10 +80,13 @@ the recorded angle. Then:
 
 - **Keshet/gam exclusion:** a concave region is measured along its true chord
   — the segment between the two horns of the bow, at whatever angle it runs.
-  If the chord spans at least **4000 amot** and the region runs deeper than
-  **2000 amot** perpendicular to the chord before reaching the city, it is
-  excluded from the squaring. *Configurable:* exclude the entire keshet, or
-  only the part where its width (parallel to the chord) exceeds 2000 amot.
+  A region whose chord spans at least **4000 amot** is excluded from the
+  squaring; *configurable:* whether the exclusion also requires the region to
+  run deeper than **2000 amot** perpendicular to the chord before reaching
+  the city. *Configurable:* exclude only the part where the keshet's width
+  (parallel to the chord) still exceeds **4000 amot** — where the arms close
+  within 4000 amot the hollow is treated as filled again — or exclude the
+  entire keshet.
 - **Rema extra** (*configurable*): add an extra 70⅔ amot around the squaring.
 
 ### 5. Shvita bounds
@@ -125,7 +128,8 @@ side distances.
 | Triangle rule: third city absorbed? | yes / no | Step 3 |
 | Triangle rule: middle city wider than the gap | does not merge (Tur, Chazon Ish) / merges (Gr"a) | Step 3 |
 | Chazon Ish straight-side squaring | off / on | Step 4 |
-| Keshet/gam exclusion extent | entire keshet / only past 2000 amot | Step 4 |
+| Keshet/gam condition | mouth ≥ 4000 and depth > 2000 amot / mouth ≥ 4000 alone | Step 4 |
+| Keshet/gam exclusion extent | only wider than 4000 amot / entire keshet | Step 4 |
 | Rema extra 70⅔ amot | off / on | Step 4 |
 | No-structure fallback | 4 amot each direction / 4 amot total | Step 5 |
 | Unequal measurement lines | extend shorter / join on diagonal | Step 6 |

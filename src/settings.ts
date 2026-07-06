@@ -1,7 +1,8 @@
 /** Halachic opinion settings and fixed constants. All lengths in amot unless noted. */
 
 export type AmahPreset = 'naeh' | 'moshe' | 'chazonIsh' | 'custom';
-export type KeshetExclusion = 'entire' | 'past2000';
+export type KeshetExclusion = 'entire' | 'past4000';
+export type KeshetCondition = 'mouthAndDepth' | 'mouthOnly';
 export type FourAmotMode = 'each' | 'total';
 export type UnequalLines = 'extend' | 'diagonal';
 export type TriangleWideMiddle = 'merge' | 'noMerge';
@@ -17,7 +18,9 @@ export interface Settings {
   triangleWideMiddle: TriangleWideMiddle;
   /** Chazon Ish: a full-length straight side determines the squaring angle. */
   chazonIshStraightSide: boolean;
-  /** Exclude the entire keshet/gam, or only where it widens past 2000 amot. */
+  /** Keshet/gam test: mouth ≥ 4000 amot and depth > 2000, or mouth alone. */
+  keshetCondition: KeshetCondition;
+  /** Exclude the entire keshet/gam, or only where it is wider than 4000 amot. */
   keshetExclusion: KeshetExclusion;
   /** Rema: every city gets an extra 70⅔ amot added to its squaring. */
   remaExtra: boolean;
@@ -59,7 +62,8 @@ export const TRIANGLE_SPAN_AMOT = 2 * MERGE_GAP_AMOT;
 export const TECHUM_AMOT = 2000;
 export const KESHET_MOUTH_AMOT = 4000;
 export const KESHET_DEPTH_AMOT = 2000;
-export const KESHET_WIDTH_AMOT = 2000;
+/** Partial exclusion keeps the keshet where its arms close within this. */
+export const KESHET_WIDTH_AMOT = 4000;
 export const REMA_EXTRA_AMOT = CITY_GAP_AMOT;
 export const FOUR_AMOT = 4;
 /** Descent limit for the downhill exception in the gradient rule. */
@@ -75,7 +79,8 @@ export const DEFAULT_SETTINGS: Settings = {
   triangleAbsorbsThird: true,
   triangleWideMiddle: 'noMerge',
   chazonIshStraightSide: false,
-  keshetExclusion: 'past2000',
+  keshetCondition: 'mouthAndDepth',
+  keshetExclusion: 'past4000',
   remaExtra: false,
   fourAmotMode: 'each',
   unequalLines: 'extend',
@@ -91,7 +96,8 @@ const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
   triangleAbsorbsThird: (v) => typeof v === 'boolean',
   triangleWideMiddle: (v) => v === 'merge' || v === 'noMerge',
   chazonIshStraightSide: (v) => typeof v === 'boolean',
-  keshetExclusion: (v) => v === 'entire' || v === 'past2000',
+  keshetCondition: (v) => v === 'mouthAndDepth' || v === 'mouthOnly',
+  keshetExclusion: (v) => v === 'entire' || v === 'past4000',
   remaExtra: (v) => typeof v === 'boolean',
   fourAmotMode: (v) => v === 'each' || v === 'total',
   unequalLines: (v) => v === 'extend' || v === 'diagonal',
@@ -136,6 +142,7 @@ export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   triangleAbsorbsThird: 3,
   triangleWideMiddle: 3,
   chazonIshStraightSide: 4,
+  keshetCondition: 4,
   keshetExclusion: 4,
   remaExtra: 4,
   fourAmotMode: 5,

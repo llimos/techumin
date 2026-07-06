@@ -88,7 +88,7 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
           'Keshet/gam detected: part of the squaring is excluded ' +
             (settings.keshetExclusion === 'entire'
               ? '(entire keshet excluded).'
-              : '(excluded only where wider than 2000 amot).'),
+              : '(excluded only where wider than 4000 amot).'),
         );
       }
     }
@@ -301,15 +301,21 @@ function keshetCut(
   // half a gap per arm — compensate the thresholds accordingly.
   const gapM = CITY_GAP_AMOT * amah;
   const depthM = Math.max(maxPos, maxNeg);
-  if (mouthM < KESHET_MOUTH_AMOT * amah - gapM || depthM <= KESHET_DEPTH_AMOT * amah - gapM / 2) {
+  if (mouthM < KESHET_MOUTH_AMOT * amah - gapM) return null;
+  if (
+    settings.keshetCondition === 'mouthAndDepth' &&
+    depthM <= KESHET_DEPTH_AMOT * amah - gapM / 2
+  ) {
     return null;
   }
 
   if (settings.keshetExclusion === 'entire') return region;
 
   // Exclude only where the keshet's cross-section (parallel to the chord) is
-  // wider than 2000 amot: sample the width at increasing depth and cut at the
-  // last depth still wider.
+  // wider than 4000 amot — where the arms close within 4000 amot, the gap
+  // between them is under the mouth threshold and the hollow beyond is
+  // treated as filled again. Sample the width at increasing depth and cut at
+  // the last depth still wider.
   const widthLimit = KESHET_WIDTH_AMOT * amah - gapM;
   const steps = 100;
   let cutDepth = 0;
