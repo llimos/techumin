@@ -10,6 +10,16 @@ import { convexHull } from './minRect';
  * disc dilation (≤ ~8% of r) — errs toward merging, never toward splitting.
  */
 export function dilateHull(points: Position[], r: number, steps = 8): Feature<Polygon> {
+  const hull = dilateHullPoints(points, r, steps);
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: [[...hull, hull[0]]] },
+  };
+}
+
+/** The dilated hull as an open CCW vertex loop (see dilateHull). */
+export function dilateHullPoints(points: Position[], r: number, steps = 8): Position[] {
   const rr = r / Math.cos(Math.PI / steps);
   const dirs: Position[] = [];
   for (let k = 0; k < steps; k++) {
@@ -20,12 +30,7 @@ export function dilateHull(points: Position[], r: number, steps = 8): Feature<Po
   for (const p of points) {
     for (const d of dirs) expanded.push([p[0] + d[0], p[1] + d[1]]);
   }
-  const hull = convexHull(expanded);
-  return {
-    type: 'Feature',
-    properties: {},
-    geometry: { type: 'Polygon', coordinates: [[...hull, hull[0]]] },
-  };
+  return convexHull(expanded);
 }
 
 /** Point-in-polygon (ray cast) with a bbox fast-reject, planar coordinates. */

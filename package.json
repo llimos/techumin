@@ -19,6 +19,7 @@
   "dependencies": {
     "@turf/turf": "^7.3.5",
     "leaflet": "^1.9.4",
-    "osmtogeojson": "^3.0.0-beta.5"
+    "osmtogeojson": "^3.0.0-beta.5",
+    "polygon-clipping": "^0.15.7"
   }
 }

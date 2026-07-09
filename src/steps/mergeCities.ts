@@ -26,6 +26,7 @@ import { featureFromLocal } from '../geo/project';
 import { bboxGap, bboxOf, type BBox } from '../geo/dilate';
 import { convexHull } from '../geo/minRect';
 import { unionAll } from '../geo/unionAll';
+import { unionFind } from '../geo/unionFind';
 import { DEBUG, debugLog } from '../debug';
 import type { CitiesResult } from './findCities';
 
@@ -69,12 +70,14 @@ function mergePlain(
   for (let i = 0; i < cities.length; i++) {
     for (let j = i + 1; j < cities.length; j++) {
       if (bboxGap(bboxes[i], bboxes[j]) > gapM) continue;
-      const gap = polygonGap(local[i], local[j]);
-      if (gap <= gapM) {
+      if (polygonGapUnder(local[i], local[j], gapM)) {
         join(i, j);
-        debugLog(
-          `Merging cities ${i + 1} and ${j + 1} using proximity - ${fmtDist(gap + comp, amah)}`,
-        );
+        if (DEBUG) {
+          const gap = polygonGap(local[i], local[j]);
+          debugLog(
+            `Merging cities ${i + 1} and ${j + 1} using proximity - ${fmtDist(gap + comp, amah)}`,
+          );
+        }
       }
     }
   }
@@ -104,9 +107,9 @@ function mergeTriangles(
 ): City[] {
   const local = cities.map((c) => c.localPolygon);
   const bboxes: BBox[] = local.map((p) => bboxOf(allPositions(p.geometry)));
-  // Hulls of the raw building vertices — real (undilated) city extents, for
+  // Hulls of the building hull vertices — real (undilated) city extents, for
   // measuring the middle city's width.
-  const rawHulls = cities.map((c) => convexHull(c.rawPointsLocal));
+  const rawHulls = cities.map((c) => convexHull(c.hullPointsLocal));
   // Bbox diagonal of each hull — an upper bound on its width in any direction.
   const rawDiags = rawHulls.map((h) => {
     const bb = bboxOf(h);
@@ -248,15 +251,6 @@ function mergeTriangles(
   return buildMerged(ctx, cities, find).merged;
 }
 
-function unionFind(n: number) {
-  const parent = Array.from({ length: n }, (_, i) => i);
-  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-  const join = (i: number, j: number) => {
-    parent[find(i)] = find(j);
-  };
-  return { find, join };
-}
-
 /**
  * Combine each union-find group into a single city. Also returns, per merged
  * city, the input-city indices it came from (for debug labelling).
@@ -286,7 +280,7 @@ function buildMerged(
     merged.push({
       polygon: featureFromLocal(ctx.frame, localPolygon),
       localPolygon,
-      rawPointsLocal: idxs.flatMap((i) => cities[i].rawPointsLocal),
+      hullPointsLocal: idxs.flatMap((i) => cities[i].hullPointsLocal),
       buildingHullsLocal: idxs.flatMap((i) => cities[i].buildingHullsLocal),
       buildingCount: idxs.reduce((s, i) => s + cities[i].buildingCount, 0),
     });
