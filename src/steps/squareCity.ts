@@ -57,9 +57,9 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   }
 
   // Work in the frame where the squaring rectangle is axis-aligned. The rect
-  // comes from the raw building vertices — the exact city bounds, without the
-  // half-gap dilation of the outline.
-  const rawRot = city.rawPointsLocal.map((p) => rotatePoint(p, -angle));
+  // comes from the building hull vertices — the exact city bounds, without
+  // the half-gap dilation of the outline.
+  const rawRot = city.hullPointsLocal.map((p) => rotatePoint(p, -angle));
   const rectRot = boundingRect(rawRot.length ? rawRot : allPositions(local.geometry), 0);
   const [minX, minY] = rectRot.corners[0];
   const [maxX, maxY] = rectRot.corners[2];

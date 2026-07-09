@@ -16,8 +16,12 @@ export interface City {
   polygon: Poly;
   /** Same outline in the local planar frame (meters). */
   localPolygon: Poly;
-  /** Raw building vertices (local frame) — exact city bounds for squaring. */
-  rawPointsLocal: Position[];
+  /**
+   * Building hull vertices (local frame) — their convex hull is the city's
+   * exact (undilated) extent, for squaring and width measurements. For a
+   * merged city this is the concatenation of the parts' hulls.
+   */
+  hullPointsLocal: Position[];
   /** Convex hull of each individual building (local frame) — undilated extents. */
   buildingHullsLocal: Position[][];
   buildingCount: number;

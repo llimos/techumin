@@ -80,6 +80,64 @@ export function polygonGapUnder(a: Poly, b: Poly, limit: number): boolean {
   return false;
 }
 
+/**
+ * True when two convex hulls (open vertex loops) are within `limit` of each
+ * other. Containment is checked first — a building drawn inside another has
+ * no crossing boundary segments, so segment distances alone could miss it.
+ */
+export function hullsWithinGap(a: Position[], b: Position[], limit: number): boolean {
+  if (pointInConvex(a[0], b) || pointInConvex(b[0], a)) return true;
+  for (let i = 0; i < a.length; i++) {
+    const a2 = a[(i + 1) % a.length];
+    for (let j = 0; j < b.length; j++) {
+      if (segSegDist(a[i], a2, b[j], b[(j + 1) % b.length]) <= limit) return true;
+    }
+  }
+  return false;
+}
+
+/** Point inside or on a convex hull given as a CCW open vertex loop. */
+function pointInConvex(p: Position, hull: Position[]): boolean {
+  if (hull.length < 3) return false;
+  for (let i = 0; i < hull.length; i++) {
+    const a = hull[i];
+    const b = hull[(i + 1) % hull.length];
+    if ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) < 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Do two non-degenerate convex polygons (open vertex loops) intersect?
+ * Separating-axis test over both polygons' edge normals.
+ */
+export function convexOverlap(a: Position[], b: Position[]): boolean {
+  return !hasSeparatingAxis(a, b) && !hasSeparatingAxis(b, a);
+}
+
+function hasSeparatingAxis(a: Position[], b: Position[]): boolean {
+  for (let i = 0; i < a.length; i++) {
+    const p = a[i];
+    const q = a[(i + 1) % a.length];
+    const nx = q[1] - p[1];
+    const ny = p[0] - q[0];
+    let minA = Infinity, maxA = -Infinity;
+    for (const [x, y] of a) {
+      const t = x * nx + y * ny;
+      if (t < minA) minA = t;
+      if (t > maxA) maxA = t;
+    }
+    let minB = Infinity, maxB = -Infinity;
+    for (const [x, y] of b) {
+      const t = x * nx + y * ny;
+      if (t < minB) minB = t;
+      if (t > maxB) maxB = t;
+    }
+    if (maxA < minB || maxB < minA) return true;
+  }
+  return false;
+}
+
 /** Closest point to p on the segment q1–q2. */
 function closestOnSeg(p: Position, q1: Position, q2: Position): Position {
   const dx = q2[0] - q1[0];
@@ -107,14 +165,35 @@ export function polygonGapLine(a: Poly, b: Poly): GapLine {
     const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
     if (dist < best.dist) best = { dist, from: p, to: q };
   };
+  // Per-segment bboxes of b, so segment pairs that cannot beat the current
+  // best (bbox distance is a lower bound) are pruned cheaply.
+  const bSegs: { ring: Position[]; boxes: Float64Array }[] = exteriorRings(b).map((ring) => {
+    const boxes = new Float64Array((ring.length - 1) * 4);
+    for (let j = 0; j < ring.length - 1; j++) {
+      boxes[j * 4] = Math.min(ring[j][0], ring[j + 1][0]);
+      boxes[j * 4 + 1] = Math.max(ring[j][0], ring[j + 1][0]);
+      boxes[j * 4 + 2] = Math.min(ring[j][1], ring[j + 1][1]);
+      boxes[j * 4 + 3] = Math.max(ring[j][1], ring[j + 1][1]);
+    }
+    return { ring, boxes };
+  });
   for (const ra of exteriorRings(a)) {
-    for (const rb of exteriorRings(b)) {
-      for (let i = 0; i < ra.length - 1; i++) {
-        for (let j = 0; j < rb.length - 1; j++) {
-          consider(ra[i], closestOnSeg(ra[i], rb[j], rb[j + 1]));
-          consider(ra[i + 1], closestOnSeg(ra[i + 1], rb[j], rb[j + 1]));
-          consider(closestOnSeg(rb[j], ra[i], ra[i + 1]), rb[j]);
-          consider(closestOnSeg(rb[j + 1], ra[i], ra[i + 1]), rb[j + 1]);
+    for (let i = 0; i < ra.length - 1; i++) {
+      const p = ra[i];
+      const q = ra[i + 1];
+      const minX = Math.min(p[0], q[0]);
+      const maxX = Math.max(p[0], q[0]);
+      const minY = Math.min(p[1], q[1]);
+      const maxY = Math.max(p[1], q[1]);
+      for (const { ring, boxes } of bSegs) {
+        for (let j = 0; j < ring.length - 1; j++) {
+          const dx = Math.max(0, boxes[j * 4] - maxX, minX - boxes[j * 4 + 1]);
+          const dy = Math.max(0, boxes[j * 4 + 2] - maxY, minY - boxes[j * 4 + 3]);
+          if (dx * dx + dy * dy >= best.dist * best.dist) continue;
+          consider(p, closestOnSeg(p, ring[j], ring[j + 1]));
+          consider(q, closestOnSeg(q, ring[j], ring[j + 1]));
+          consider(closestOnSeg(ring[j], p, q), ring[j]);
+          consider(closestOnSeg(ring[j + 1], p, q), ring[j + 1]);
         }
       }
     }
