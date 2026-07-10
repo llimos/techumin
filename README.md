@@ -125,6 +125,33 @@ corners. Where a keshet/gam exclusion indents the squaring deeper than the
 measured distance, the techum follows the indented shape at the measured
 side distances.
 
+#### Havla'ah (swallowed cities)
+
+A city (its ribua) that lies fully inside the measured techum is *swallowed*:
+its length along the measurement direction counts as only **4 amot**, so the
+techum extends outward past it by (city length − 4 amot). A city qualifies
+when it faces a **side** of the techum proper — its span across the
+measurement direction overlaps the shvita's span — not only an added squared
+corner, and its whole length fits within the measured distance on that side.
+Its width may exceed the techum's.
+
+The sideways width of the added area is *configurable:*
+
+- **Magen Avraham:** the city's own width only.
+- **Chazon Ish:** the city's width plus 2000 amot each side, capped at the
+  original techum width (the cap is lifted for the eruv's start city — see
+  below — which always keeps its full width).
+- **Rema:** the city's width plus 2000 amot each side, uncapped.
+
+At that width, the techum widens level with the swallowed city (the sideways
+extension applies only parallel to the city, not beyond it) and extends
+outward past the measured edge by the freed (length − 4 amot).
+
+When measuring from an eruv techumin, *configurable* (Rema): the city holding
+the original start point is swallowed even when its length is only partly
+within the eruv techum — but only far enough to include the whole city,
+nothing beyond.
+
 ### Eruv techumin
 
 After a techum is calculated, an eruv techumin can be placed on the map (the
@@ -150,6 +177,8 @@ cached, so removing the eruv restores it instantly.
 | Rema extra 70⅔ amot | off / on | Step 4 |
 | No-structure fallback | 4 amot each direction / 4 amot total | Step 5 |
 | Unequal measurement lines | extend shorter / join on diagonal | Step 6 |
+| Havla'ah sideways width | city width (Magen Avraham) / city + 2000 capped at techum width (Chazon Ish) / city + 2000 uncapped (Rema) | Step 6 |
+| Havla'ah of the eruv's start city when partly beyond the techum | on (Rema) / off | Eruv re-measure |
 | Eruv techumin placement | within 2000 amot of the start point / anywhere in the city's techum | Eruv re-measure |
 | Data radius (non-halachic) | 3 km default | Step 1 |
 
@@ -165,9 +194,15 @@ cached, so removing the eruv restores it instantly.
 
 - City shapes are only as good as OSM building coverage in the area.
 - Measurement lines are straight; obstacles, water and karpef are ignored.
-- No havla'ah: for a point outside any city, a city inside the measured techum
-  is not reduced to 4 amot, and the techum is not truncated where the measure
-  ends in the middle of a city.
+- Havla'ah is a single pass: a city fully enclosed only by the *extension*
+  past a nearer swallowed city is not itself swallowed, and the extension is
+  applied flat — the freed (length − 4 amot) is not re-measured over the
+  terrain past the city.
+- A swallowed city is judged against its side's longest measured ray, so with
+  "join on the diagonal" the enclosure test and the extension base slightly
+  over-approximate mid-side.
+- The techum is not truncated where the measure ends in the middle of a city
+  that is not fully enclosed.
 - Keshet/gam and oblong detection use geometric tolerances, not psak-grade
   judgment.
 - Terrain inside a keshet indentation is not measured separately — the four

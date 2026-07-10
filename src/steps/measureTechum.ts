@@ -1,16 +1,24 @@
 /** Step 6: measure 2000 amot out from the shvita corners and build the techum. */
 
-import { difference, featureCollection, polygon as turfPolygon } from '@turf/turf';
+import {
+  booleanPointInPolygon,
+  difference,
+  featureCollection,
+  point as turfPoint,
+  polygon as turfPolygon,
+} from '@turf/turf';
 import type { Position } from 'geojson';
-import type { PipelineContext, Poly, Shvita } from '../types';
+import type { LatLon, PipelineContext, Poly, Shvita, Squaring } from '../types';
 import {
   DESCENT_LIMIT_AMOT,
+  FOUR_AMOT,
   GRADIENT_THRESHOLD,
   ROPE_AMOT,
   TECHUM_AMOT,
   amahMeters,
   type Settings,
 } from '../settings';
+import { unionAll } from '../geo/unionAll';
 import { boundingRect } from '../geo/minRect';
 import { minkowskiSumRect } from '../geo/minkowski';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
@@ -22,6 +30,8 @@ export async function measureTechum(
   ctx: PipelineContext,
   settings: Settings,
   shvita: Shvita,
+  squarings: Squaring[] = [],
+  opts: { startPoint?: LatLon } = {},
 ): Promise<Poly> {
   const amah = amahMeters(settings);
   const techumM = TECHUM_AMOT * amah;
@@ -135,7 +145,165 @@ export async function measureTechum(
     }
   }
 
+  // Havla'ah: a city fully enclosed within the measured 2000 amot is
+  // "swallowed" — its length along the ray counts as only 4 amot, so the
+  // techum reaches farther out past it.
+  const swallowed = havlaahBumps(ctx, settings, shvita, squarings, opts.startPoint, {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    dW,
+    dE,
+    dS,
+    dN,
+  });
+  if (swallowed.rects.length) {
+    techumRot = unionAll([techumRot, ...swallowed.rects]) ?? techumRot;
+    ctx.warn(
+      `Havla'ah: ${swallowed.count} enclosed ${swallowed.count === 1 ? 'city counts' : 'cities count'} ` +
+        'as 4 amot; the techum extends past it. The extension uses the city ribua and the ' +
+        'measured side distances — it is not measured separately over the terrain.',
+    );
+  }
+
   return featureFromLocal(ctx.frame, rotateFeature(techumRot, shvita.angle));
+}
+
+/** Shvita bounding box and measured reaches in the rotated frame. */
+interface ShvitaFrame {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  dW: number;
+  dE: number;
+  dS: number;
+  dN: number;
+}
+
+/**
+ * Rectangles (rotated frame) added to the techum by havla'ah, plus the number
+ * of swallowed cities. A city qualifies for a side when its ribua lies beyond
+ * that side's shvita edge, its cross-span overlaps the shvita's own span (so
+ * it faces a side of the techum proper, not a squared corner — its width may
+ * exceed the techum's), and its whole length along the ray fits inside the
+ * measured reach. Each swallowed city adds two rectangles at the sideways
+ * band width of the chosen opinion: one level with the city itself, and one
+ * extending the techum outward past its measured edge by (length − 4 amot).
+ * The city holding the eruv's start point is a special case (see below).
+ */
+function havlaahBumps(
+  ctx: PipelineContext,
+  settings: Settings,
+  shvita: Shvita,
+  squarings: Squaring[],
+  startPoint: LatLon | undefined,
+  f: ShvitaFrame,
+): { rects: Poly[]; count: number } {
+  const amah = amahMeters(settings);
+  const a2000 = TECHUM_AMOT * amah;
+  const four = FOUR_AMOT * amah;
+  const { minX, minY, maxX, maxY, dW, dE, dS, dN } = f;
+
+  // Sides in a canonical "outward is + along `axis`" orientation. `edge` is
+  // the shvita edge, `reach` the measured distance, `techumSpan` the outer
+  // techum extent on the cross axis (for the Chazon Ish cap).
+  type Side = {
+    axis: 'x' | 'y';
+    sign: 1 | -1;
+    edge: number;
+    reach: number;
+    shvitaSpan: [number, number];
+    techumSpan: [number, number];
+  };
+  const spanX: [number, number] = [minX - dW, maxX + dE];
+  const spanY: [number, number] = [minY - dS, maxY + dN];
+  const sides: Side[] = [
+    { axis: 'y', sign: 1, edge: maxY, reach: dN, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { axis: 'y', sign: -1, edge: minY, reach: dS, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { axis: 'x', sign: 1, edge: maxX, reach: dE, shvitaSpan: [minY, maxY], techumSpan: spanY },
+    { axis: 'x', sign: -1, edge: minX, reach: dW, shvitaSpan: [minY, maxY], techumSpan: spanY },
+  ];
+
+  const overlaps = (a: [number, number], b: [number, number]): boolean =>
+    a[0] < b[1] && b[0] < a[1];
+
+  const rects: Poly[] = [];
+  let count = 0;
+  for (const sq of squarings) {
+    // City ribua in the shvita-aligned rotated frame, as an axis-aligned bbox.
+    const rotSq = rotateFeature(featureToLocal(ctx.frame, sq.polygon), -shvita.angle);
+    const rect = boundingRect(allPositions(rotSq.geometry), 0);
+    const [bx0, by0] = rect.corners[0];
+    const [bx1, by1] = rect.corners[2];
+
+    // Skip the shvita's own city — its ribua overlaps the shvita bbox.
+    if (overlaps([bx0, bx1], [minX, maxX]) && overlaps([by0, by1], [minY, maxY])) continue;
+
+    const startCity =
+      startPoint !== undefined &&
+      booleanPointInPolygon(turfPoint([startPoint.lon, startPoint.lat]), sq.polygon);
+
+    for (const s of sides) {
+      // Project the city bbox onto the along-ray axis (near → far, outward
+      // positive) and the cross axis.
+      const alongLo = s.axis === 'y' ? by0 : bx0;
+      const alongHi = s.axis === 'y' ? by1 : bx1;
+      const cross: [number, number] = s.axis === 'y' ? [bx0, bx1] : [by0, by1];
+      const near = s.sign === 1 ? alongLo : alongHi;
+      const far = s.sign === 1 ? alongHi : alongLo;
+      const len = alongHi - alongLo;
+
+      // Beyond this edge, and facing the side (cross-span overlaps the shvita).
+      const beyond = s.sign === 1 ? near > s.edge : near < s.edge;
+      if (!beyond || !overlaps(cross, s.shvitaSpan)) continue;
+
+      const reachOut = s.edge + s.sign * s.reach; // outer techum edge on this side
+      const nearWithin = s.sign === 1 ? near <= reachOut : near >= reachOut;
+      const fullyWithin = s.sign === 1 ? far <= reachOut : far >= reachOut;
+
+      // Outward extension past the measured edge, when the whole city is
+      // inside the 2000 amot: the freed (length − 4 amot) budget.
+      let bumpOut: number | undefined;
+      if (fullyWithin) {
+        const delta = Math.max(0, len - four);
+        if (delta > 0) bumpOut = reachOut + s.sign * delta;
+      } else if (!(startCity && settings.havlaahEruvStartCity && nearWithin)) {
+        // Rema: the eruv's start city is swallowed even when only partly
+        // within the techum — but only far enough to include the whole city
+        // (the side band below covers it); anything else is not swallowed.
+        continue;
+      }
+
+      // Sideways band on the cross axis, per opinion. The Chazon Ish cap is
+      // lifted for the eruv start city (its full width is always included).
+      let band: [number, number];
+      if (settings.havlaahWidth === 'rema') {
+        band = [cross[0] - a2000, cross[1] + a2000];
+      } else if (settings.havlaahWidth === 'magenAvraham' || startCity) {
+        band = [cross[0], cross[1]];
+      } else {
+        band = [
+          Math.max(cross[0] - a2000, s.techumSpan[0]),
+          Math.min(cross[1] + a2000, s.techumSpan[1]),
+        ];
+      }
+      if (band[1] <= band[0]) continue;
+
+      // Two rectangles across the band: one level with the city (the sideways
+      // extension applies only parallel to the city), one outward past the
+      // measured techum edge by the freed budget.
+      const sideRect = (lo: number, hi: number): Poly =>
+        s.axis === 'y'
+          ? rectPoly(band[0], Math.min(lo, hi), band[1], Math.max(lo, hi))
+          : rectPoly(Math.min(lo, hi), band[0], Math.max(lo, hi), band[1]);
+      rects.push(sideRect(near, far));
+      if (bumpOut !== undefined) rects.push(sideRect(reachOut, bumpOut));
+      count++;
+    }
+  }
+  return { rects, count };
 }
 
 type Line = [Position, Position];
