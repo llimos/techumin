@@ -24,6 +24,7 @@ import {
 import { allPositions } from '../geo/rotate';
 import { featureFromLocal } from '../geo/project';
 import { bboxGap, bboxOf, type BBox } from '../geo/dilate';
+import { mergeDataEdges } from '../geo/dataEdges';
 import { convexHull } from '../geo/minRect';
 import { unionAll } from '../geo/unionAll';
 import { unionFind } from '../geo/unionFind';
@@ -283,6 +284,7 @@ function buildMerged(
       hullPointsLocal: idxs.flatMap((i) => cities[i].hullPointsLocal),
       buildingHullsLocal: idxs.flatMap((i) => cities[i].buildingHullsLocal),
       buildingCount: idxs.reduce((s, i) => s + cities[i].buildingCount, 0),
+      dataEdges: idxs.map((i) => cities[i].dataEdges).reduce(mergeDataEdges),
     });
   }
   return { merged, groups };

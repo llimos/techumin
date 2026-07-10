@@ -1,8 +1,10 @@
 /** Leaflet map with one overlay layer per pipeline output. */
 
 import L from 'leaflet';
-import type { LatLon, Poly } from './types';
+import type { Position } from 'geojson';
+import type { DataEdges, LatLon, Poly } from './types';
 import type { PipelineOutputs } from './pipeline';
+import { anyDataEdge } from './geo/dataEdges';
 import { MeasureTool } from './ui/measure';
 import { DEBUG } from './debug';
 
@@ -136,6 +138,20 @@ export class TechumMap {
         style,
       }).addTo(group);
     };
+    // Like set, but borders facing a side where the building data ran out are
+    // drawn dotted — they may not be the real bounds.
+    const setEdged = (
+      key: string,
+      items: { feature: Poly; edges: DataEdges }[] | undefined,
+      style: L.PathOptions,
+    ) => {
+      const group = this.layers[key];
+      group.clearLayers();
+      for (const { feature, edges } of items ?? []) {
+        if (anyDataEdge(edges)) addSplitStroke(group, feature, style, edges);
+        else L.geoJSON(feature, { style }).addTo(group);
+      }
+    };
 
     set('buildings', outputs.fetched?.buildings, {
       color: '#7f8c8d',
@@ -155,12 +171,11 @@ export class TechumMap {
       weight: 2,
       fillOpacity: 0.08,
     });
-    set('squarings', outputs.squarings?.map((s) => s.polygon), {
-      color: '#8e44ad',
-      weight: 2,
-      dashArray: '8 4',
-      fillOpacity: 0.04,
-    });
+    setEdged(
+      'squarings',
+      outputs.squarings?.map((s) => ({ feature: s.polygon, edges: s.dataEdges })),
+      { color: '#8e44ad', weight: 2, dashArray: '8 4', fillOpacity: 0.04 },
+    );
     set('keshet', outputs.squarings?.flatMap((s) => s.keshetCuts), {
       color: '#c0392b',
       weight: 1.5,
@@ -170,18 +185,20 @@ export class TechumMap {
     // With an eruv placed, the shvita/techum layers show only the eruv's, in
     // a purple scheme; the home outputs stay cached but are not drawn.
     const eruv = !!(outputs.eruvShvita || outputs.eruvTechum);
-    set(
+    const shvita = eruv ? outputs.eruvShvita : outputs.shvita;
+    setEdged(
       'shvita',
-      eruv
-        ? outputs.eruvShvita && [outputs.eruvShvita.polygon]
-        : outputs.shvita && [outputs.shvita.polygon],
+      shvita && [{ feature: shvita.polygon, edges: shvita.dataEdges }],
       eruv
         ? { color: '#8e44ad', weight: 2, dashArray: '4 3', fillOpacity: 0.05 }
         : { color: '#2980b9', weight: 2, fillOpacity: 0.05 },
     );
-    set(
+    // The techum inherits the shvita's uncertainty: it is measured outward
+    // from the shvita, so any side the shvita may fall short on, it may too.
+    const techum = eruv ? outputs.eruvTechum : outputs.techum;
+    setEdged(
       'techum',
-      eruv ? outputs.eruvTechum && [outputs.eruvTechum] : outputs.techum && [outputs.techum],
+      techum && shvita && [{ feature: techum, edges: shvita.dataEdges }],
       eruv
         ? { color: '#8e44ad', weight: 3, fillOpacity: 0.06 }
         : { color: '#27ae60', weight: 3, fillOpacity: 0.06 },
@@ -208,4 +225,88 @@ export class TechumMap {
       this.map.fitBounds(L.geoJSON(fit).getBounds(), { padding: [24, 24] });
     }
   }
+}
+
+/** Dash pattern marking a border that may not be the real bound. */
+const UNCERTAIN_DASH = '2 8';
+
+/**
+ * Draw a polygon with its border split per side: fill as usual, then solid
+ * polylines along edges facing reliable directions and dotted ones along
+ * edges facing a side where the building data ran out.
+ */
+function addSplitStroke(
+  group: L.LayerGroup,
+  feature: Poly,
+  style: L.PathOptions,
+  edges: DataEdges,
+): void {
+  L.geoJSON(feature, { style: { ...style, stroke: false } }).addTo(group);
+  const solid: L.PathOptions = { ...style, fill: false };
+  const dotted: L.PathOptions = { ...solid, dashArray: UNCERTAIN_DASH };
+  const polys =
+    feature.geometry.type === 'Polygon'
+      ? [feature.geometry.coordinates]
+      : feature.geometry.coordinates;
+  for (const rings of polys) {
+    for (const ring of rings) {
+      for (const run of splitRuns(ring, edges)) {
+        const latlngs = run.points.map(([lon, lat]) => [lat, lon] as L.LatLngTuple);
+        L.polyline(latlngs, run.dotted ? dotted : solid).addTo(group);
+      }
+    }
+  }
+}
+
+interface StrokeRun {
+  points: Position[];
+  dotted: boolean;
+}
+
+/**
+ * Split a closed ring into maximal runs of edges by whether each edge faces
+ * an uncertain side. An edge belongs to the compass side its outward normal
+ * is nearest to, so rotated squarings, keshet cuts, and rounded Rema corners
+ * all classify sensibly.
+ */
+function splitRuns(ring: Position[], edges: DataEdges): StrokeRun[] {
+  const m = ring.length - 1; // last point repeats the first
+  if (m < 3) return [{ points: ring, dotted: false }];
+
+  // Ring orientation (shoelace sign) decides which normal points outward.
+  let area = 0;
+  for (let i = 0; i < m; i++) {
+    area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  }
+  const sign = area >= 0 ? 1 : -1;
+  const cosLat = Math.cos((ring[0][1] * Math.PI) / 180);
+
+  const classes: boolean[] = [];
+  for (let i = 0; i < m; i++) {
+    const dx = (ring[i + 1][0] - ring[i][0]) * cosLat; // meters-proportional east
+    const dy = ring[i + 1][1] - ring[i][1]; // north
+    const nx = sign * dy;
+    const ny = -sign * dx;
+    const side = Math.abs(nx) > Math.abs(ny) ? (nx > 0 ? 'e' : 'w') : ny > 0 ? 'n' : 's';
+    classes.push(edges[side]);
+  }
+  if (classes.every((c) => c === classes[0])) return [{ points: ring, dotted: classes[0] }];
+
+  // Start at a class boundary so no run is split across the ring seam.
+  let start = 0;
+  while (classes[(start - 1 + m) % m] === classes[start]) start++;
+  const runs: StrokeRun[] = [];
+  let i = start;
+  do {
+    const cls = classes[i];
+    const points: Position[] = [ring[i]];
+    let j = i;
+    while (classes[j] === cls) {
+      points.push(ring[(j + 1) % m]);
+      j = (j + 1) % m;
+    }
+    runs.push({ points, dotted: cls });
+    i = j;
+  } while (i !== start);
+  return runs;
 }

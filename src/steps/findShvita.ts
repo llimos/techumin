@@ -5,6 +5,7 @@ import type { Position } from 'geojson';
 import type { LatLon, PipelineContext, Poly, Shvita, Squaring } from '../types';
 import { CITY_GAP_AMOT, FOUR_AMOT, amahMeters, type Settings } from '../settings';
 import { boundingRect } from '../geo/minRect';
+import { noDataEdges } from '../geo/dataEdges';
 import { allPositions } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, toLocal } from '../geo/project';
 import { pointPolygonGap } from '../geo/gaps';
@@ -32,7 +33,7 @@ export function findShvita(
       debugLog(
         `Shvisa: point is inside a city (${sq.city.buildingCount} buildings) - using its squaring`,
       );
-      return { polygon: sq.polygon, angle: sq.angle, source: 'city' };
+      return { polygon: sq.polygon, angle: sq.angle, source: 'city', dataEdges: sq.dataEdges };
     }
   }
 
@@ -67,7 +68,7 @@ export function findShvita(
       ]) as Poly,
     );
     ctx.warn('Point is outside any city; measuring from the enclosing building.');
-    return { polygon, angle: 0, source: 'building' };
+    return { polygon, angle: 0, source: 'building', dataEdges: noDataEdges() };
   }
 
   // Open country: a 4-amot square around the point.
@@ -100,7 +101,7 @@ export function pointShvita(
       ],
     ]) as Poly,
   );
-  return { polygon, angle: 0, source: 'point' };
+  return { polygon, angle: 0, source: 'point', dataEdges: noDataEdges() };
 }
 
 /**
