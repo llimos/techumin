@@ -19,6 +19,7 @@ import {
   amahMeters,
   type Settings,
 } from '../settings';
+import { anyDataEdge } from '../geo/dataEdges';
 import { pointInRings } from '../geo/dilate';
 import { boundingRect, minAreaRect } from '../geo/minRect';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
@@ -36,7 +37,15 @@ export function squareCities(
   settings: Settings,
   merged: City[],
 ): Squaring[] {
-  return merged.map((city) => squareOne(ctx, settings, city));
+  const squarings = merged.map((city) => squareOne(ctx, settings, city));
+  const truncated = squarings.filter((s) => anyDataEdge(s.dataEdges)).length;
+  if (truncated > 0) {
+    ctx.warn(
+      `Building data ran out at the edge of the loaded area for ${truncated} ` +
+        `${truncated === 1 ? 'city' : 'cities'} — the dotted borders may understate the real bounds.`,
+    );
+  }
+  return squarings;
 }
 
 function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squaring {
