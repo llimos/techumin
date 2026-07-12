@@ -4,7 +4,7 @@
  * cities, so the triangle rule works with whole cities, not raw fragments.
  */
 
-import type { Position } from 'geojson';
+import type { Feature, Polygon, Position } from 'geojson';
 import type { City, PipelineContext } from '../types';
 import {
   CITY_GAP_AMOT,
@@ -15,6 +15,7 @@ import {
   type Settings,
 } from '../settings';
 import {
+  convexOverlap,
   polygonGap,
   polygonGapLine,
   polygonGapUnder,
@@ -83,7 +84,11 @@ function mergePlain(ctx: PipelineContext, settings: Settings, cities: City[]): C
  *   gap(A,B) ≤ 2000 amot, gap(B,C) ≤ 2000 amot, and
  *   gap(A,C) ≤ 282⅔ amot + B's width along the A–C gap line
  * (B is viewed as if moved into the gap between A and C, where its width
- * fills part of the distance). The rule only applies when the line between
+ * fills part of the distance). B must also actually sit opposite that gap:
+ * its hull must reach the band swept sideways from the gap between A and C's
+ * facing extents (judged by the real undilated hulls — a middle city beyond
+ * either outer city in the gap direction does not trigger the rule).
+ * The rule only applies when the line between
  * A and C (along their shortest gap) does not pass through a building of any
  * other city besides B. Configurable: whether a B wider than the A–C gap
  * still merges them (Gr"a) or not (Tur/Chazon Ish).
@@ -135,6 +140,30 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
       gapLineCache.set(key, line);
     }
     return line;
+  };
+
+  // The area extending from the gap between an outer pair: B qualifies as a
+  // middle city only if it reaches the band swept sideways from the gap
+  // between A and C's facing extents. Judged on the real (undilated) hulls:
+  // the axis u is the shortest line between the two hulls, the facing extent
+  // is where the hulls overlap laterally (perpendicular to u), and the
+  // corridor spans, along u, the full gap between the facing boundaries over
+  // that lateral range. B must overlap [uStart, uEnd] when projected onto u.
+  // null: no meaningful gap direction (hulls touch/overlap) — check passes.
+  const corridorCache = new Map<number, Corridor | null>();
+  const corridor = (a: number, c: number): Corridor | null => {
+    const key = a * n + c;
+    let cor = corridorCache.get(key);
+    if (cor === undefined) {
+      cor = gapCorridor(rawHulls[a], rawHulls[c]);
+      corridorCache.set(key, cor);
+    }
+    return cor;
+  };
+  const inCorridor = (b: number, cor: Corridor | null): boolean => {
+    if (cor === null) return true;
+    const [lo, hi] = projectRange(rawHulls[b], cor.ux, cor.uy);
+    return hi >= cor.uStart && lo <= cor.uEnd;
   };
 
   // Cities with a building crossed by the shortest line between a pair —
@@ -201,7 +230,15 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
         // Skip when the join would change nothing (also prevents repeat warns).
         const pairMerged = find(a) === find(c);
         if (pairMerged && (!settings.triangleAbsorbsThird || find(b) === find(a))) continue;
-        if (!sideOk(a, b) || !sideOk(b, c) || !spanOk(a, c, b)) continue;
+        if (!sideOk(a, b) || !sideOk(b, c)) continue;
+        if (!inCorridor(b, corridor(a, c))) {
+          ctx.log(
+            `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
+              `${labels[b]} - it lies outside the area extending from the gap between them`,
+          );
+          continue;
+        }
+        if (!spanOk(a, c, b)) continue;
         const blocking = blockers(a, c).filter((d) => d !== b);
         if (blocking.length > 0) {
           ctx.log(
@@ -281,14 +318,116 @@ function buildMerged(ctx: PipelineContext, cities: City[], find: (i: number) => 
 function widthAlong(hull: Position[], from: Position, to: Position): number {
   const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
   if (len === 0 || hull.length === 0) return 0;
-  const ux = (to[0] - from[0]) / len;
-  const uy = (to[1] - from[1]) / len;
+  const [min, max] = projectRange(hull, (to[0] - from[0]) / len, (to[1] - from[1]) / len);
+  return max - min;
+}
+
+/** Min/max of a point set projected onto the unit direction (ux, uy). */
+function projectRange(points: Position[], ux: number, uy: number): [number, number] {
   let min = Infinity;
   let max = -Infinity;
-  for (const [x, y] of hull) {
+  for (const [x, y] of points) {
     const t = x * ux + y * uy;
     if (t < min) min = t;
     if (t > max) max = t;
   }
-  return max - min;
+  return [min, max];
+}
+
+/**
+ * The band extending sideways from the gap between two city hulls: (ux, uy)
+ * is the unit direction of the shortest hull-to-hull line, and [uStart, uEnd]
+ * the gap's extent along it between the hulls' facing boundaries, over the
+ * full lateral range where the hulls face each other.
+ */
+interface Corridor {
+  ux: number;
+  uy: number;
+  uStart: number;
+  uEnd: number;
+}
+
+function gapCorridor(hullA: Position[], hullC: Position[]): Corridor | null {
+  // Overlapping hulls (deeply concave cities interleaving) have no gap
+  // direction; polygonGapLine assumes disjoint boundaries, so bail out first.
+  if (convexOverlap(hullA, hullC)) return null;
+  const { from, to } = polygonGapLine(hullFeature(hullA), hullFeature(hullC));
+  const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  if (len < 1e-9) return null;
+  const ux = (to[0] - from[0]) / len;
+  const uy = (to[1] - from[1]) / len;
+  const vx = -uy;
+  const vy = ux;
+  // Lateral (perpendicular to u) range where the hulls face each other.
+  // Never empty: the gap line is parallel to u, so its endpoints share one
+  // lateral value that lies on both hulls.
+  const [aLoV, aHiV] = projectRange(hullA, vx, vy);
+  const [cLoV, cHiV] = projectRange(hullC, vx, vy);
+  const vLo = Math.max(aLoV, cLoV);
+  const vHi = Math.min(aHiV, cHiV);
+  // A's facing boundary (max u at a given lateral value) is concave in the
+  // lateral value and C's (min u) convex, so their extremes over the facing
+  // range are attained at its ends — two slices per hull suffice.
+  const uStart = Math.min(
+    sliceURange(hullA, ux, uy, vx, vy, vLo)[1],
+    sliceURange(hullA, ux, uy, vx, vy, vHi)[1],
+  );
+  const uEnd = Math.max(
+    sliceURange(hullC, ux, uy, vx, vy, vLo)[0],
+    sliceURange(hullC, ux, uy, vx, vy, vHi)[0],
+  );
+  return { ux, uy, uStart, uEnd };
+}
+
+/** A convex hull (open vertex loop) as a polygon feature. */
+function hullFeature(hull: Position[]): Feature<Polygon> {
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: [[...hull, hull[0]]] },
+  };
+}
+
+/**
+ * u-extent of a convex hull's cross-section at lateral position v, where
+ * u/v coordinates are dot products with the (ux, uy) / (vx, vy) unit
+ * directions. v is expected to lie within the hull's lateral projection.
+ */
+function sliceURange(
+  hull: Position[],
+  ux: number,
+  uy: number,
+  vx: number,
+  vy: number,
+  v: number,
+): [number, number] {
+  let min = Infinity;
+  let max = -Infinity;
+  const add = (u: number) => {
+    if (u < min) min = u;
+    if (u > max) max = u;
+  };
+  for (let i = 0; i < hull.length; i++) {
+    const p = hull[i];
+    const q = hull[(i + 1) % hull.length];
+    const sp = p[0] * vx + p[1] * vy - v;
+    const sq = q[0] * vx + q[1] * vy - v;
+    if (sp === 0) add(p[0] * ux + p[1] * uy);
+    else if (sq !== 0 && sp < 0 !== sq < 0) {
+      const t = sp / (sp - sq);
+      add((p[0] + t * (q[0] - p[0])) * ux + (p[1] + t * (q[1] - p[1])) * uy);
+    }
+  }
+  if (min === Infinity) {
+    // v grazed past every edge numerically — use the nearest vertex.
+    let best = Infinity;
+    for (const p of hull) {
+      const s = Math.abs(p[0] * vx + p[1] * vy - v);
+      if (s < best) {
+        best = s;
+        min = max = p[0] * ux + p[1] * uy;
+      }
+    }
+  }
+  return [min, max];
 }
