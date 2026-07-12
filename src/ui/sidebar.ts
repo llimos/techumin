@@ -65,7 +65,7 @@ export class Sidebar {
   constructor(root: HTMLElement, settings: Settings, cb: SidebarCallbacks) {
     this.cb = cb;
     root.innerHTML = `
-      <h1>Techumin</h1>
+      <h1>Techum.app</h1>
       <p class="subtitle">Techum Shabbos calculator</p>
 
       <section class="disclaimers">
