@@ -184,6 +184,7 @@ export class TechumPipeline {
         warn: () => {},
         logs: [],
         log: () => {},
+        debug: () => {},
       };
       this.personalZoneCache = measureTechum(
         ctx,
@@ -233,6 +234,7 @@ export class TechumPipeline {
         ctx.logs.push(m);
         debugLog(m);
       },
+      debug: debugLog,
     };
 
     // Drop stale outputs and warnings from the re-run steps onward. The eruv
@@ -409,6 +411,7 @@ export class TechumPipeline {
           ...ctx,
           warn: (m) => ctx.warn(`Eruv: ${m}`),
           log: (m) => ctx.log(`Eruv: ${m}`),
+          debug: (m) => ctx.debug(`Eruv: ${m}`),
         };
         o.eruvShvita = findShvita(eruvCtx, this.settings, o.fetched!, o.squarings!, eruv);
         break;

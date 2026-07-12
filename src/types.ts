@@ -84,4 +84,6 @@ export interface PipelineContext {
   /** Calculation log: the reasoning behind each step, shown in the report. */
   logs: string[];
   log(message: string): void;
+  /** Debug-only log: goes to the debug console but not the report. */
+  debug(message: string): void;
 }
