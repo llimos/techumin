@@ -125,9 +125,10 @@ export class Sidebar {
 
       <section>
         <h2>Data</h2>
-        <label>Building data radius: <span id="radius-label"></span> km
+        <label>Initial building data radius: <span id="radius-label"></span> km
           <input type="range" data-setting="fetchRadiusM" min="1000" max="6000" step="500" />
         </label>
+        <p class="hint">Extends automatically while the city reaches the data boundary.</p>
       </section>
 
       <section>

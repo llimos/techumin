@@ -1,16 +1,17 @@
 /**
- * Which sides of the square building-fetch area the data runs out on: a point
- * near an edge of the fetch square means the buildings there may continue
- * beyond the loaded data. The fetch bbox is built with the same
- * equirectangular scaling as the local frame, so in local coordinates it is
- * exactly the square [-radiusM, radiusM]².
+ * Which sides of the building-fetch area the data runs out on: a point near
+ * an edge of the loaded extent means the buildings there may continue beyond
+ * the loaded data. Fetch bboxes are built with the same equirectangular
+ * scaling as the local frame, so the loaded extent is an exact rectangle in
+ * local coordinates.
  */
 
 import type { Position } from 'geojson';
+import type { BBox } from './dilate';
 import type { DataEdges } from '../types';
 
-/** Within this fraction of the fetch radius counts as reaching the edge. */
-const EDGE_MARGIN = 0.95;
+/** Within this many meters of the loaded extent counts as reaching the edge. */
+const EDGE_MARGIN_M = 150;
 
 export function noDataEdges(): DataEdges {
   return { n: false, e: false, s: false, w: false };
@@ -24,15 +25,14 @@ export function mergeDataEdges(a: DataEdges, b: DataEdges): DataEdges {
   return { n: a.n || b.n, e: a.e || b.e, s: a.s || b.s, w: a.w || b.w };
 }
 
-/** Fetch-square sides the given local-frame points come near. */
-export function dataEdgesOfPoints(points: Position[], radiusM: number): DataEdges {
-  const thr = radiusM * EDGE_MARGIN;
+/** Loaded-extent sides the given local-frame points come near. */
+export function dataEdgesOfPoints(points: Position[], extent: BBox): DataEdges {
   const edges = noDataEdges();
   for (const [x, y] of points) {
-    if (y > thr) edges.n = true;
-    if (x > thr) edges.e = true;
-    if (y < -thr) edges.s = true;
-    if (x < -thr) edges.w = true;
+    if (y > extent.maxY - EDGE_MARGIN_M) edges.n = true;
+    if (x > extent.maxX - EDGE_MARGIN_M) edges.e = true;
+    if (y < extent.minY + EDGE_MARGIN_M) edges.s = true;
+    if (x < extent.minX + EDGE_MARGIN_M) edges.w = true;
   }
   return edges;
 }

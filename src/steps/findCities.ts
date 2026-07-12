@@ -69,8 +69,8 @@ export function findCities(
       buildingHullsLocal: members.map((i) => hulls[i]),
       buildingCount: members.length,
       // Extreme vertices survive the convex hull, so the hull points suffice
-      // to tell whether the cluster reaches the fetch boundary.
-      dataEdges: dataEdgesOfPoints(hullPointsLocal, fetched.radiusM),
+      // to tell whether the cluster reaches the loaded boundary.
+      dataEdges: dataEdgesOfPoints(hullPointsLocal, fetched.extent),
     };
     (members.length >= MIN_CITY_BUILDINGS ? cities : structures).push(cluster);
   }

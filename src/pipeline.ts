@@ -6,10 +6,18 @@
  */
 
 import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
-import type { City, LatLon, PipelineContext, Poly, Shvita, Squaring } from './types';
+import type { Position } from 'geojson';
+import type { City, DataEdges, LatLon, PipelineContext, Poly, Shvita, Squaring } from './types';
 import { SETTING_FIRST_STEP, type Settings } from './settings';
+import { anyDataEdge, describeDataEdges } from './geo/dataEdges';
+import { pointInRings } from './geo/dilate';
 import { makeFrame } from './geo/project';
-import { fetchBuildings, type FetchResult } from './steps/fetchBuildings';
+import {
+  MAX_EXTENT_M,
+  extendBuildings,
+  fetchBuildings,
+  type FetchResult,
+} from './steps/fetchBuildings';
 import { findCities, type CitiesResult } from './steps/findCities';
 import { mergeCities } from './steps/mergeCities';
 import { squareCities } from './steps/squareCity';
@@ -223,6 +231,15 @@ export class TechumPipeline {
           this.stepOutput(step),
           ctx.warnings.length ? { warnings: ctx.warnings } : '',
         );
+        if (step === 5) {
+          const expand = await this.maybeExpand(ctx, token);
+          if (expand === 'aborted') return;
+          if (expand === 'expanded') {
+            this.emit(true); // show the extended buildings right away
+            step = 1; // re-run findCities onward with the extended data
+            continue;
+          }
+        }
         if (step === lastStep()) this.stage = undefined;
         this.emit(step < lastStep());
       }
@@ -232,6 +249,79 @@ export class TechumPipeline {
       console.error('[techum] pipeline failed', err);
       this.emit(false, err instanceof Error ? err.message : String(err));
     }
+  }
+
+  /**
+   * Sides where more building data could change the point's own bounds: the
+   * shvita city's truncated sides — or, when the point sits in a cluster too
+   * small to be a city, that cluster's (more data might make it a city).
+   * Other truncated cities keep their dotted borders; they never set the
+   * shvita, so refetching for them would cost Overpass with no gain here.
+   */
+  private expansionEdges(): DataEdges | null {
+    const o = this.outputs;
+    if (o.shvita!.source === 'city') return o.shvita!.dataEdges;
+    const structure = o.citiesResult!.structures.find((s) => polyContains(s.localPolygon, [0, 0]));
+    return structure?.dataEdges ?? null;
+  }
+
+  /**
+   * After the shvita is found: when the data ran out under the point's own
+   * city, fetch strips on just those sides so the bounds come from real data
+   * instead of the fetch cutoff. Returns 'expanded' when the pipeline must
+   * re-run from findCities, 'no' to continue to the techum, 'aborted' when
+   * this run was superseded mid-fetch. Bounded: each strip pushes the loaded
+   * extent outward until the flags clear or every side reaches MAX_EXTENT_M.
+   */
+  private async maybeExpand(
+    ctx: PipelineContext,
+    token: number,
+  ): Promise<'expanded' | 'no' | 'aborted'> {
+    const o = this.outputs;
+    const want = this.expansionEdges();
+    if (!want || !anyDataEdge(want)) return 'no';
+    const ext = o.fetched!.extent;
+    const sides: DataEdges = {
+      n: want.n && ext.maxY < MAX_EXTENT_M,
+      s: want.s && -ext.minY < MAX_EXTENT_M,
+      e: want.e && ext.maxX < MAX_EXTENT_M,
+      w: want.w && -ext.minX < MAX_EXTENT_M,
+    };
+    if (!anyDataEdge(sides)) {
+      this.stepWarnings[4].push(
+        `The city still reaches the data boundary at the ${MAX_EXTENT_M / 1000} km ` +
+          'fetch limit — the dotted borders may understate the real bounds.',
+      );
+      return 'no';
+    }
+    this.stage = `Extending building data (${describeDataEdges(sides)})`;
+    this.emit(true);
+    await nextPaint();
+    // Fetch warnings (mirror failures, Overpass remarks) belong to the fetch step.
+    ctx.warnings = this.stepWarnings[0];
+    try {
+      const t0 = performance.now();
+      const fetched = await extendBuildings(ctx, o.fetched!, sides);
+      if (token !== this.runToken) return 'aborted';
+      console.debug(
+        `[techum] extended data ${describeDataEdges(sides)} ` +
+          `(${Math.round(performance.now() - t0)} ms, ${fetched.buildings.length} buildings)`,
+        fetched.extent,
+      );
+      o.fetched = fetched;
+    } catch (err) {
+      if (token !== this.runToken) return 'aborted';
+      this.stepWarnings[0].push(
+        `Could not extend the building data (${err instanceof Error ? err.message : String(err)}) ` +
+          '— the dotted borders may understate the real bounds.',
+      );
+      return 'no';
+    }
+    o.citiesResult = undefined;
+    o.merged = undefined;
+    o.squarings = undefined;
+    o.shvita = undefined;
+    return 'expanded';
   }
 
   private async runStep(step: number, ctx: PipelineContext): Promise<void> {
@@ -296,4 +386,10 @@ export class TechumPipeline {
       error,
     });
   }
+}
+
+function polyContains(poly: Poly, p: Position): boolean {
+  const g = poly.geometry;
+  if (g.type === 'Polygon') return pointInRings(p, g.coordinates);
+  return g.coordinates.some((rings) => pointInRings(p, rings));
 }
