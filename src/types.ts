@@ -40,6 +40,12 @@ export interface City {
   buildingCount: number;
   /** Fetch-area sides this city's buildings come near — it may extend past them. */
   dataEdges: DataEdges;
+  /**
+   * Merge identity, e.g. "3" or "1+3" — the raw findCities numbers (as shown
+   * on the map) of the cities merged into this one, joined by '+'. Set by
+   * mergeCities; raw cities have no label.
+   */
+  label?: string;
 }
 
 export interface Squaring {
@@ -75,4 +81,7 @@ export interface PipelineContext {
   frame: LocalFrame;
   warnings: string[];
   warn(message: string): void;
+  /** Calculation log: the reasoning behind each step, shown in the report. */
+  logs: string[];
+  log(message: string): void;
 }

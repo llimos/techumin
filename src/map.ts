@@ -1,6 +1,7 @@
 /** Leaflet map with one overlay layer per pipeline output. */
 
 import L from 'leaflet';
+import { toPng } from 'html-to-image';
 import type { Position } from 'geojson';
 import type { DataEdges, LatLon, Poly } from './types';
 import type { PipelineOutputs } from './pipeline';
@@ -31,6 +32,7 @@ const AmahScale = (L.Control.Scale as any).extend({
 
 export class TechumMap {
   readonly map: L.Map;
+  private tiles: L.TileLayer;
   private marker: L.CircleMarker | null = null;
   private eruvMarker: L.Marker | null = null;
   private layers: Record<string, L.LayerGroup> = {};
@@ -43,8 +45,11 @@ export class TechumMap {
 
   constructor(container: HTMLElement) {
     this.map = L.map(container).setView([31.778, 35.235], 15);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // crossOrigin lets the report snapshot draw the tiles onto a canvas
+    // without tainting it (the OSM tile server allows CORS).
+    this.tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      crossOrigin: true,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(this.map);
     L.control.scale({ imperial: false }).addTo(this.map);
@@ -62,12 +67,18 @@ export class TechumMap {
       ['shvita', 'Shvisa bounds', true],
       ['techum', 'Techum boundary', true],
     ];
-    if (DEBUG) defs.push(['cityNumbers', 'City numbers (debug)', true]);
     for (const [key, label, on] of defs) {
       const group = L.layerGroup();
       this.layers[key] = group;
       overlays[label] = group;
       if (on) group.addTo(this.map);
+    }
+    // City numbers are always populated (the report snapshot shows them
+    // temporarily) but shown and offered in the control only in debug mode.
+    this.layers['cityNumbers'] = L.layerGroup();
+    if (DEBUG) {
+      overlays['City numbers (debug)'] = this.layers['cityNumbers'];
+      this.layers['cityNumbers'].addTo(this.map);
     }
     L.control.layers({}, overlays, { collapsed: false }).addTo(this.map);
     this.eruvZone = L.layerGroup().addTo(this.map);
@@ -204,25 +215,64 @@ export class TechumMap {
         : { color: '#27ae60', weight: 3, fillOpacity: 0.06 },
     );
 
-    if (DEBUG) {
-      const group = this.layers['cityNumbers'];
-      group.clearLayers();
-      outputs.citiesResult?.cities.forEach((city, i) => {
-        const center = L.geoJSON(city.polygon).getBounds().getCenter();
-        L.marker(center, {
-          icon: L.divIcon({
-            className: 'city-debug-label',
-            html: String(i + 1),
-            iconSize: [26, 26],
-          }),
-          interactive: false,
-        }).addTo(group);
-      });
-    }
+    const numbers = this.layers['cityNumbers'];
+    numbers.clearLayers();
+    outputs.citiesResult?.cities.forEach((city, i) => {
+      const center = L.geoJSON(city.polygon).getBounds().getCenter();
+      L.marker(center, {
+        icon: L.divIcon({
+          className: 'city-debug-label',
+          html: String(i + 1),
+          iconSize: [26, 26],
+        }),
+        interactive: false,
+      }).addTo(numbers);
+    });
 
     const fit = outputs.eruvTechum ?? outputs.techum;
     if (fit) {
       this.map.fitBounds(L.geoJSON(fit).getBounds(), { padding: [24, 24] });
+    }
+  }
+
+  /**
+   * Snapshot the map for the printable report: fit the view to the given
+   * polygon, show the city numbers, hide the interactive controls (keeping
+   * the attribution and scale bars), wait for the tiles, and rasterize the
+   * container to a PNG data URL. The previous view and layers are restored;
+   * returns null when the capture fails (e.g. a tile that taints the canvas).
+   */
+  async captureReport(fit: Poly | null): Promise<string | null> {
+    const container = this.map.getContainer();
+    const center = this.map.getCenter();
+    const zoom = this.map.getZoom();
+    const numbers = this.layers['cityNumbers'];
+    const numbersWereOn = this.map.hasLayer(numbers);
+    container.classList.add('map-capturing');
+    if (!numbersWereOn) numbers.addTo(this.map);
+    try {
+      if (fit) {
+        const moved = new Promise<void>((resolve) => {
+          this.map.once('moveend', () => resolve());
+          setTimeout(resolve, 400); // fitBounds may be a no-op and never fire
+        });
+        this.map.fitBounds(L.geoJSON(fit).getBounds(), { padding: [24, 24], animate: false });
+        await moved;
+      }
+      if (this.tiles.isLoading()) {
+        await new Promise<void>((resolve) => {
+          this.tiles.once('load', () => resolve());
+          setTimeout(resolve, 8000); // don't hang the report on a slow tile
+        });
+      }
+      return await toPng(container, { pixelRatio: 2 });
+    } catch (err) {
+      console.error('[techum] map capture failed', err);
+      return null;
+    } finally {
+      container.classList.remove('map-capturing');
+      if (!numbersWereOn) numbers.remove();
+      this.map.setView(center, zoom, { animate: false });
     }
   }
 }

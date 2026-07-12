@@ -10,7 +10,6 @@ import { allPositions } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, toLocal } from '../geo/project';
 import { pointPolygonGap } from '../geo/gaps';
 import { pointInRings } from '../geo/dilate';
-import { debugLog } from '../debug';
 import type { FetchResult } from './fetchBuildings';
 
 export function findShvita(
@@ -30,8 +29,9 @@ export function findShvita(
   // the 70⅔ strip only when the Rema karpef option is on.
   for (const sq of squarings) {
     if (inCityBounds(localPt, sq.city.localPolygon, halfGapM, settings.remaExtra)) {
-      debugLog(
-        `Shvisa: point is inside a city (${sq.city.buildingCount} buildings) - using its squaring`,
+      ctx.log(
+        `Shvisa: point is inside city ${sq.city.label ?? '?'} ` +
+          `(${sq.city.buildingCount} buildings) - using its squaring`,
       );
       return { polygon: sq.polygon, angle: sq.angle, source: 'city', dataEdges: sq.dataEdges };
     }

@@ -9,6 +9,7 @@ import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
 import type { Position } from 'geojson';
 import type { City, DataEdges, LatLon, PipelineContext, Poly, Shvita, Squaring } from './types';
 import { SETTING_FIRST_STEP, type Settings } from './settings';
+import { debugLog } from './debug';
 import { anyDataEdge, describeDataEdges } from './geo/dataEdges';
 import { pointInRings } from './geo/dilate';
 import { makeFrame } from './geo/project';
@@ -33,6 +34,19 @@ export interface PipelineOutputs {
   techum?: Poly;
   eruvShvita?: Shvita;
   eruvTechum?: Poly;
+}
+
+export interface ReportStep {
+  title: string;
+  logs: string[];
+  warnings: string[];
+}
+
+export interface ReportData {
+  steps: ReportStep[];
+  settings: Settings;
+  point: LatLon | null;
+  eruvPoint: LatLon | null;
 }
 
 export interface PipelineUpdate {
@@ -91,6 +105,8 @@ export class TechumPipeline {
   private outputs: PipelineOutputs = {};
   /** Warnings collected per step, so partial re-runs keep earlier warnings. */
   private stepWarnings: string[][] = [[], [], [], [], [], [], [], []];
+  /** Calculation log per step (ctx.log) — the reasoning shown in the report. */
+  private stepLogs: string[][] = [[], [], [], [], [], [], [], []];
   /** Techum from a 4-amot shvita at the start point; cached per home run. */
   private personalZoneCache: Promise<Poly> | null = null;
   private runToken = 0;
@@ -104,6 +120,20 @@ export class TechumPipeline {
 
   getSettings(): Settings {
     return { ...this.settings };
+  }
+
+  /** Everything the printable report needs, pulled on demand. */
+  getReportData(): ReportData {
+    return {
+      steps: STAGE_LABELS.map((title, i) => ({
+        title,
+        logs: [...this.stepLogs[i]],
+        warnings: [...this.stepWarnings[i]],
+      })),
+      settings: { ...this.settings },
+      point: this.point,
+      eruvPoint: this.eruvPoint,
+    };
   }
 
   setPoint(point: LatLon): void {
@@ -126,6 +156,8 @@ export class TechumPipeline {
     this.outputs.eruvTechum = undefined;
     this.stepWarnings[6] = [];
     this.stepWarnings[7] = [];
+    this.stepLogs[6] = [];
+    this.stepLogs[7] = [];
     this.emit(this.stage !== undefined);
   }
 
@@ -150,6 +182,8 @@ export class TechumPipeline {
         frame: makeFrame(point.lat, point.lon),
         warnings: [],
         warn: () => {},
+        logs: [],
+        log: () => {},
       };
       this.personalZoneCache = measureTechum(
         ctx,
@@ -194,6 +228,11 @@ export class TechumPipeline {
       frame: makeFrame(point.lat, point.lon),
       warnings: [],
       warn: (m) => ctx.warnings.push(m),
+      logs: [],
+      log: (m) => {
+        ctx.logs.push(m);
+        debugLog(m);
+      },
     };
 
     // Drop stale outputs and warnings from the re-run steps onward. The eruv
@@ -211,7 +250,10 @@ export class TechumPipeline {
     }
     o.eruvShvita = undefined;
     o.eruvTechum = undefined;
-    for (let i = fromStep - 1; i < 8; i++) this.stepWarnings[i] = [];
+    for (let i = fromStep - 1; i < 8; i++) {
+      this.stepWarnings[i] = [];
+      this.stepLogs[i] = [];
+    }
 
     // Re-evaluated per iteration: clearing the eruv mid-run ends the run at 6.
     const lastStep = () => (this.eruvPoint ? 8 : 6);
@@ -222,10 +264,12 @@ export class TechumPipeline {
         await nextPaint(); // let the stage popup show before a blocking step
         if (token !== this.runToken) return;
         ctx.warnings = [];
+        ctx.logs = [];
         const t0 = performance.now();
         await this.runStep(step, ctx);
         if (token !== this.runToken) return; // superseded by a newer run
         this.stepWarnings[step - 1] = ctx.warnings;
+        this.stepLogs[step - 1] = ctx.logs;
         console.debug(
           `[techum] ${STEP_NAMES[step - 1]} (${Math.round(performance.now() - t0)} ms)`,
           this.stepOutput(step),
@@ -299,6 +343,7 @@ export class TechumPipeline {
     await nextPaint();
     // Fetch warnings (mirror failures, Overpass remarks) belong to the fetch step.
     ctx.warnings = this.stepWarnings[0];
+    ctx.logs = this.stepLogs[0];
     try {
       const t0 = performance.now();
       const fetched = await extendBuildings(ctx, o.fetched!, sides);
@@ -360,7 +405,11 @@ export class TechumPipeline {
               'most poskim do not allow returning to the start point.',
           );
         }
-        const eruvCtx: PipelineContext = { ...ctx, warn: (m) => ctx.warn(`Eruv: ${m}`) };
+        const eruvCtx: PipelineContext = {
+          ...ctx,
+          warn: (m) => ctx.warn(`Eruv: ${m}`),
+          log: (m) => ctx.log(`Eruv: ${m}`),
+        };
         o.eruvShvita = findShvita(eruvCtx, this.settings, o.fetched!, o.squarings!, eruv);
         break;
       }

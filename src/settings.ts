@@ -61,6 +61,116 @@ export function amahMeters(s: Settings): number {
   return cm / 100;
 }
 
+/**
+ * Display metadata for each setting, in sidebar order — the single source of
+ * the user-facing labels, rendered by both the sidebar controls and the
+ * report. Values are plain text (no HTML entities); escape when inlining.
+ */
+export interface SettingMeta {
+  key: keyof Settings;
+  label: string;
+  kind: 'select' | 'checkbox' | 'number' | 'range';
+  /** Per-value display labels, for selects. */
+  values?: Record<string, string>;
+}
+
+export const SETTING_META: SettingMeta[] = [
+  { key: 'amahPreset', label: 'Amah length', kind: 'select', values: AMAH_LABELS },
+  { key: 'customAmahCm', label: 'Custom amah (cm)', kind: 'number' },
+  {
+    key: 'triangleAbsorbsThird',
+    label: 'Triangle rule: third city joins the merged city',
+    kind: 'checkbox',
+  },
+  {
+    key: 'triangleWideMiddle',
+    label: 'Triangle rule: middle city wider than the gap',
+    kind: 'select',
+    values: {
+      noMerge: 'Does not merge (Tur, Chazon Ish)',
+      merge: 'Still merges (Gr"a)',
+    },
+  },
+  {
+    key: 'chazonIshStraightSide',
+    label: 'Chazon Ish: square along a full straight side',
+    kind: 'checkbox',
+  },
+  {
+    key: 'keshetCondition',
+    label: 'Keshet/gam condition',
+    kind: 'select',
+    values: {
+      mouthAndDepth: 'Mouth ≥ 4000 and depth > 2000 amot',
+      mouthOnly: 'Mouth ≥ 4000 amot alone',
+    },
+  },
+  {
+    key: 'keshetExclusion',
+    label: 'Keshet/gam exclusion',
+    kind: 'select',
+    values: {
+      past4000: 'Exclude only wider than 4000 amot',
+      entire: 'Exclude entire keshet',
+    },
+  },
+  { key: 'remaExtra', label: 'Rema: extra 70⅔ amot for every city', kind: 'checkbox' },
+  {
+    key: 'fourAmotMode',
+    label: 'No-structure fallback',
+    kind: 'select',
+    values: {
+      each: '4 amot in each direction',
+      total: '4 amot total',
+    },
+  },
+  {
+    key: 'unequalLines',
+    label: 'Unequal measurement lines',
+    kind: 'select',
+    values: {
+      extend: 'Extend the shorter line',
+      diagonal: 'Join on the diagonal',
+    },
+  },
+  {
+    key: 'havlaahWidth',
+    label: "Havla'ah: width of the techum past a swallowed city",
+    kind: 'select',
+    values: {
+      magenAvraham: 'City width only (Magen Avraham)',
+      chazonIsh: 'City + 2000, capped at techum width (Chazon Ish)',
+      rema: 'City + 2000 amot each side (Rema)',
+    },
+  },
+  {
+    key: 'havlaahEruvStartCity',
+    label: "Rema: eruv's start city is swallowed even when partly beyond the techum",
+    kind: 'checkbox',
+  },
+  {
+    key: 'eruvCityTechum',
+    label: "Eruv techumin may be placed anywhere in the city's techum",
+    kind: 'checkbox',
+  },
+  { key: 'fetchRadiusM', label: 'Initial building data radius', kind: 'range' },
+];
+
+/** The current value of a setting as display text, for the report. */
+export function settingValueLabel(meta: SettingMeta, settings: Settings): string {
+  const value = settings[meta.key];
+  switch (meta.kind) {
+    case 'select':
+      return meta.values?.[String(value)] ?? String(value);
+    case 'checkbox':
+      return value ? 'Yes' : 'No';
+    case 'number':
+      return `${value} cm`;
+    case 'range':
+      return `${((value as number) / 1000).toFixed(1)} km`;
+  }
+}
+
 export const MAX_AMAH_M = Math.max(...Object.values(AMAH_CM)) / 100;
 
 // Fixed halachic constants (amot)

@@ -24,7 +24,6 @@ import { minkowskiSumRect } from '../geo/minkowski';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal, featureToLocal, fromLocal } from '../geo/project';
 import { elevationAt } from '../elevation';
-import { debugLog } from '../debug';
 
 export async function measureTechum(
   ctx: PipelineContext,
@@ -70,14 +69,12 @@ export async function measureTechum(
     ['W', dWs, dWn],
     ['E', dEs, dEn],
   ];
-  debugLog(
-    `Techum rays, m of ${techumM.toFixed(1)} budget (gradient-rule shortfall in parens): ` +
-      rays
-        .map(
-          ([dir, a, b]) =>
-            `${dir} ${a.toFixed(1)} (−${(techumM - a).toFixed(1)}) / ${b.toFixed(1)} (−${(techumM - b).toFixed(1)})`,
-        )
-        .join(', '),
+  const fmtRay = (m: number): string =>
+    `${(m / amah).toFixed(0)} amot/${m.toFixed(0)} m (−${(techumM - m).toFixed(1)} m)`;
+  ctx.log(
+    `Techum rays, of the ${TECHUM_AMOT}-amot (${techumM.toFixed(1)} m) budget ` +
+      '(gradient-rule shortfall in parens): ' +
+      rays.map(([dir, a, b]) => `${dir} ${fmtRay(a)} / ${fmtRay(b)}`).join(', '),
   );
 
   const dW = Math.max(dWs, dWn);
@@ -208,8 +205,11 @@ function havlaahBumps(
 
   // Sides in a canonical "outward is + along `axis`" orientation. `edge` is
   // the shvita edge, `reach` the measured distance, `techumSpan` the outer
-  // techum extent on the cross axis (for the Chazon Ish cap).
+  // techum extent on the cross axis (for the Chazon Ish cap). `name` is the
+  // side's compass direction in the shvita-rotated frame — approximate when
+  // the shvita is rotated.
   type Side = {
+    name: string;
     axis: 'x' | 'y';
     sign: 1 | -1;
     edge: number;
@@ -220,10 +220,10 @@ function havlaahBumps(
   const spanX: [number, number] = [minX - dW, maxX + dE];
   const spanY: [number, number] = [minY - dS, maxY + dN];
   const sides: Side[] = [
-    { axis: 'y', sign: 1, edge: maxY, reach: dN, shvitaSpan: [minX, maxX], techumSpan: spanX },
-    { axis: 'y', sign: -1, edge: minY, reach: dS, shvitaSpan: [minX, maxX], techumSpan: spanX },
-    { axis: 'x', sign: 1, edge: maxX, reach: dE, shvitaSpan: [minY, maxY], techumSpan: spanY },
-    { axis: 'x', sign: -1, edge: minX, reach: dW, shvitaSpan: [minY, maxY], techumSpan: spanY },
+    { name: 'north', axis: 'y', sign: 1, edge: maxY, reach: dN, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { name: 'south', axis: 'y', sign: -1, edge: minY, reach: dS, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { name: 'east', axis: 'x', sign: 1, edge: maxX, reach: dE, shvitaSpan: [minY, maxY], techumSpan: spanY },
+    { name: 'west', axis: 'x', sign: -1, edge: minX, reach: dW, shvitaSpan: [minY, maxY], techumSpan: spanY },
   ];
 
   const overlaps = (a: [number, number], b: [number, number]): boolean =>
@@ -301,6 +301,25 @@ function havlaahBumps(
       rects.push(sideRect(near, far));
       if (bumpOut !== undefined) rects.push(sideRect(reachOut, bumpOut));
       count++;
+
+      const cityLabel = sq.city.label ?? '?';
+      const lenAmot = Math.round(len / amah);
+      if (fullyWithin) {
+        const extAmot = Math.round(Math.max(0, len - four) / amah);
+        ctx.log(
+          `Havla'ah: city ${cityLabel} (${lenAmot} amot long) is enclosed within the ` +
+            `measured 2000 amot to the ${s.name} — it counts as 4 amot` +
+            (extAmot > 0
+              ? ` and the techum extends ${extAmot} amot past it.`
+              : ' (no extension — it is no longer than 4 amot).'),
+        );
+      } else {
+        ctx.log(
+          `Havla'ah (Rema): the eruv's start city ${cityLabel} (${lenAmot} amot long, ` +
+            `to the ${s.name}) is only partly within the techum — it is swallowed far ` +
+            'enough to include the whole city, with no outward extension.',
+        );
+      }
     }
   }
   return { rects, count };

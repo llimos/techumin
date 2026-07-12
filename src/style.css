@@ -97,6 +97,11 @@ body,
   margin: 8px 0;
 }
 
+/* display: block above would otherwise defeat the hidden attribute. */
+#sidebar label[hidden] {
+  display: none;
+}
+
 #sidebar select,
 #sidebar input[type='number'] {
   display: block;
@@ -238,4 +243,10 @@ body,
   padding-left: 18px;
   color: #666;
   font-size: 12.5px;
+}
+
+/* While snapshotting the map for the report: hide the interactive controls
+   but keep the OSM attribution (required) and the metre/amot scale bars. */
+.map-capturing .leaflet-control:not(.leaflet-control-attribution):not(.leaflet-control-scale) {
+  display: none;
 }

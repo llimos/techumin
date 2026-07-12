@@ -88,16 +88,24 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
     for (const region of flatten(gaps).features as Poly[]) {
       const cut = keshetCut(region, cityRot, minX, minY, maxX, maxY, amah, settings);
       if (!cut) continue;
-      const next = difference(featureCollection([squaringRot, cut]));
+      const next = difference(featureCollection([squaringRot, cut.poly]));
       if (next) {
         squaringRot = next as Poly;
         isRectangle = false;
-        keshetCutsRot.push(cut);
+        keshetCutsRot.push(cut.poly);
         ctx.warn(
-          'Keshet/gam detected: part of the squaring is excluded ' +
+          `Keshet/gam detected in city ${city.label ?? '?'}: part of the squaring is excluded ` +
             (settings.keshetExclusion === 'entire'
               ? '(entire keshet excluded).'
               : '(excluded only where wider than 4000 amot).'),
+        );
+        ctx.log(
+          `Keshet/gam in city ${city.label ?? '?'}: mouth ${Math.round(cut.mouthM / amah)} amot, ` +
+            `depth ${Math.round(cut.depthM / amah)} amot, measured on the gap-filled outline ` +
+            '(the 70⅔-amot dilation narrows the hollow; the thresholds are compensated) — ' +
+            (settings.keshetExclusion === 'entire'
+              ? 'the entire keshet is excluded from the squaring.'
+              : 'excluded from the squaring only where wider than 4000 amot.'),
         );
       }
     }
@@ -222,7 +230,8 @@ function pointLineOffset(p: Position, origin: Position, theta: number): number {
 
 /**
  * Decide whether a rect-minus-city region is a halachic keshet/gam and return
- * the polygon to exclude from the squaring (or null to keep it).
+ * the polygon to exclude from the squaring with its measured mouth and depth
+ * (or null to keep the region).
  * Frame: squaring rectangle is axis-aligned [minX..maxX]×[minY..maxY].
  *
  * The mouth (chord) runs between the two horns of the bow — the farthest-apart
@@ -239,7 +248,7 @@ function keshetCut(
   maxY: number,
   amah: number,
   settings: Settings,
-): Poly | null {
+): { poly: Poly; mouthM: number; depthM: number } | null {
   const eps = 0.5;
   const pts = allPositions(region.geometry);
 
@@ -318,7 +327,7 @@ function keshetCut(
     return null;
   }
 
-  if (settings.keshetExclusion === 'entire') return region;
+  if (settings.keshetExclusion === 'entire') return { poly: region, mouthM, depthM };
 
   // Exclude only where the keshet's cross-section (parallel to the chord) is
   // wider than 4000 amot — where the arms close within 4000 amot, the gap
@@ -356,7 +365,7 @@ function keshetCut(
   ).map(([u, v]): Position => [h1[0] + u * ux + v * vx, h1[1] + u * uy + v * vy]);
   const band = turfPolygon([[...bandCorners, bandCorners[0]]]) as Poly;
   const clipped = intersectSafe(region, band);
-  return clipped ?? region;
+  return { poly: clipped ?? region, mouthM, depthM };
 }
 
 /**

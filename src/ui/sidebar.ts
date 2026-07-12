@@ -1,6 +1,6 @@
 /** Sidebar: location search, halachic opinion controls, warnings, disclaimers. */
 
-import { AMAH_LABELS, type AmahPreset, type Settings } from '../settings';
+import { SETTING_META, type SettingMeta, type Settings } from '../settings';
 import { geocode } from '../geocode';
 import type { LatLon } from '../types';
 
@@ -9,12 +9,14 @@ export interface SidebarCallbacks {
   onLocate(point: LatLon, label?: string): void;
   /** The eruv button: arms placement, cancels it, or removes the eruv. */
   onEruvButton(): void;
+  /** Open the printable calculation report in a new tab. */
+  onGenerateReport(): void;
 }
 
 /** UI phase of the eruv techumin button, driven by the orchestrator. */
 export type EruvPhase = 'disabled' | 'ready' | 'arming' | 'placed';
 
-const DISCLAIMERS = [
+export const DISCLAIMERS = [
   'This tool estimates techum boundaries for reference only — consult a rabbi for practical psak.',
   'City shapes come from OpenStreetMap building data; results are only as good as OSM coverage in the area.',
   'City eruvim are not considered — according to some opinions an eruv can change the city boundary.',
@@ -22,12 +24,41 @@ const DISCLAIMERS = [
   'Terrain data has ~10–30 m resolution; micro-terrain is ignored.',
 ];
 
+const esc = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Markup for one halachic-opinion control, from its display metadata. */
+function settingControl(meta: SettingMeta): string {
+  if (meta.key === 'customAmahCm') {
+    return `<label id="custom-amah-row" hidden>${esc(meta.label)}
+      <input type="number" data-setting="customAmahCm" min="30" max="80" step="0.1" />
+    </label>`;
+  }
+  switch (meta.kind) {
+    case 'select':
+      return `<label>${esc(meta.label)}
+        <select data-setting="${meta.key}">
+          ${Object.entries(meta.values ?? {})
+            .map(([v, l]) => `<option value="${v}">${esc(l)}</option>`)
+            .join('')}
+        </select>
+      </label>`;
+    case 'checkbox':
+      return `<label><input type="checkbox" data-setting="${meta.key}" />
+        ${esc(meta.label)}</label>`;
+    default:
+      return '';
+  }
+}
+
 export class Sidebar {
   private warningsEl: HTMLElement;
   private statusEl: HTMLElement;
   private resultsEl: HTMLElement;
   private eruvBtnEl: HTMLButtonElement;
   private eruvHintEl: HTMLElement;
+  private reportBtnEl: HTMLButtonElement;
+  private reportHintEl: HTMLElement;
   private cb: SidebarCallbacks;
 
   constructor(root: HTMLElement, settings: Settings, cb: SidebarCallbacks) {
@@ -60,64 +91,16 @@ export class Sidebar {
       </section>
 
       <section>
+        <h2>Report</h2>
+        <button id="report-btn" type="button" disabled>Generate report</button>
+        <p class="hint" id="report-hint">Calculate a techum first.</p>
+      </section>
+
+      <section>
         <h2>Halachic opinions</h2>
-        <label>Amah length
-          <select data-setting="amahPreset">
-            ${(Object.keys(AMAH_LABELS) as AmahPreset[])
-              .map((k) => `<option value="${k}">${AMAH_LABELS[k]}</option>`)
-              .join('')}
-          </select>
-        </label>
-        <label id="custom-amah-row" hidden>Custom amah (cm)
-          <input type="number" data-setting="customAmahCm" min="30" max="80" step="0.1" />
-        </label>
-        <label><input type="checkbox" data-setting="triangleAbsorbsThird" />
-          Triangle rule: third city joins the merged city</label>
-        <label>Triangle rule: middle city wider than the gap
-          <select data-setting="triangleWideMiddle">
-            <option value="noMerge">Does not merge (Tur, Chazon Ish)</option>
-            <option value="merge">Still merges (Gr&quot;a)</option>
-          </select>
-        </label>
-        <label><input type="checkbox" data-setting="chazonIshStraightSide" />
-          Chazon Ish: square along a full straight side</label>
-        <label>Keshet/gam condition
-          <select data-setting="keshetCondition">
-            <option value="mouthAndDepth">Mouth ≥ 4000 and depth &gt; 2000 amot</option>
-            <option value="mouthOnly">Mouth ≥ 4000 amot alone</option>
-          </select>
-        </label>
-        <label>Keshet/gam exclusion
-          <select data-setting="keshetExclusion">
-            <option value="past4000">Exclude only wider than 4000 amot</option>
-            <option value="entire">Exclude entire keshet</option>
-          </select>
-        </label>
-        <label><input type="checkbox" data-setting="remaExtra" />
-          Rema: extra 70⅔ amot for every city</label>
-        <label>No-structure fallback
-          <select data-setting="fourAmotMode">
-            <option value="each">4 amot in each direction</option>
-            <option value="total">4 amot total</option>
-          </select>
-        </label>
-        <label>Unequal measurement lines
-          <select data-setting="unequalLines">
-            <option value="extend">Extend the shorter line</option>
-            <option value="diagonal">Join on the diagonal</option>
-          </select>
-        </label>
-        <label>Havla'ah: width of the techum past a swallowed city
-          <select data-setting="havlaahWidth">
-            <option value="magenAvraham">City width only (Magen Avraham)</option>
-            <option value="chazonIsh">City + 2000, capped at techum width (Chazon Ish)</option>
-            <option value="rema">City + 2000 amot each side (Rema)</option>
-          </select>
-        </label>
-        <label><input type="checkbox" data-setting="havlaahEruvStartCity" />
-          Rema: eruv's start city is swallowed even when partly beyond the techum</label>
-        <label><input type="checkbox" data-setting="eruvCityTechum" />
-          Eruv techumin may be placed anywhere in the city's techum</label>
+        ${SETTING_META.filter((m) => m.key !== 'fetchRadiusM')
+          .map(settingControl)
+          .join('')}
         <p class="hint eruv-notice" id="eruv-city-notice" hidden>Even according to this
           opinion, most poskim do not allow returning to the start point when the eruv
           is more than 2000 amot from it.</p>
@@ -142,6 +125,8 @@ export class Sidebar {
     this.resultsEl = root.querySelector('#search-results')!;
     this.eruvBtnEl = root.querySelector<HTMLButtonElement>('#eruv-btn')!;
     this.eruvHintEl = root.querySelector('#eruv-hint')!;
+    this.reportBtnEl = root.querySelector<HTMLButtonElement>('#report-btn')!;
+    this.reportHintEl = root.querySelector('#report-hint')!;
 
     // Initialize control values from settings and wire change events.
     for (const el of root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-setting]')) {
@@ -172,6 +157,7 @@ export class Sidebar {
     });
 
     this.eruvBtnEl.addEventListener('click', () => this.cb.onEruvButton());
+    this.reportBtnEl.addEventListener('click', () => this.cb.onGenerateReport());
 
     root.querySelector('#geolocate')!.addEventListener('click', () => {
       navigator.geolocation.getCurrentPosition(
@@ -209,6 +195,13 @@ export class Sidebar {
           : phase === 'ready'
             ? 'Place an eruv to measure the techum from it instead.'
             : 'Calculate a techum first.';
+  }
+
+  setReportEnabled(enabled: boolean): void {
+    this.reportBtnEl.disabled = !enabled;
+    this.reportHintEl.textContent = enabled
+      ? 'Opens a printable report in a new tab.'
+      : 'Calculate a techum first.';
   }
 
   private async search(query: string): Promise<void> {

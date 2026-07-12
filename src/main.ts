@@ -3,6 +3,7 @@ import './style.css';
 import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
 import { TechumMap } from './map';
 import { Sidebar } from './ui/sidebar';
+import { openReportWindow, renderReport } from './ui/report';
 import { TechumPipeline, type PipelineOutputs } from './pipeline';
 import { amahMeters, loadSettings, saveSettings } from './settings';
 import { DEBUG } from './debug';
@@ -40,6 +41,7 @@ const sidebar = new Sidebar(document.querySelector('#sidebar')!, pipeline.getSet
   },
   onLocate: (point) => pick(point),
   onEruvButton: () => void onEruvButton(),
+  onGenerateReport: () => void generateReport(),
 });
 map.setAmahMeters(amahMeters(pipeline.getSettings()));
 
@@ -182,6 +184,26 @@ function refreshEruvUi(): void {
   );
 }
 
+/** Snapshot the map and open the printable report in a new tab. */
+async function generateReport(): Promise<void> {
+  if (!lastOutputs.techum) return;
+  // Open the tab synchronously, inside the click, so popup blockers allow it.
+  const win = openReportWindow();
+  if (!win) {
+    sidebar.setStatus('Popup blocked — allow popups for this site to generate the report.');
+    return;
+  }
+  sidebar.setStatus('Preparing report…');
+  const image = await map.captureReport(lastOutputs.eruvTechum ?? lastOutputs.techum ?? null);
+  // Pull the report data after the capture so it reflects the latest run.
+  renderReport(win, {
+    report: pipeline.getReportData(),
+    imageDataUrl: image,
+    appUrl: location.href,
+  });
+  sidebar.setStatus('Done.');
+}
+
 pipeline.onUpdate = ({ outputs, warnings, running, stage, error }) => {
   lastOutputs = outputs;
   if (DEBUG) (window as unknown as Record<string, unknown>).__techumOutputs = outputs;
@@ -190,6 +212,7 @@ pipeline.onUpdate = ({ outputs, warnings, running, stage, error }) => {
   overlay.hidden = !running;
   if (running) overlay.textContent = `Calculating — ${stage ?? 'starting'}…`;
   sidebar.setStatus(error ? `Error: ${error}` : running ? 'Calculating…' : 'Done.');
+  sidebar.setReportEnabled(!!outputs.techum && !running);
   // The zone (and any placement in progress) dies with the techum it was cut from.
   if (armingEruv && !outputs.techum) stopArming();
   if (pendingEruv && !running && !error && outputs.techum && !eruvPoint) {

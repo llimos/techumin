@@ -28,7 +28,6 @@ import { mergeDataEdges } from '../geo/dataEdges';
 import { convexHull } from '../geo/minRect';
 import { unionAll } from '../geo/unionAll';
 import { unionFind } from '../geo/unionFind';
-import { DEBUG, debugLog } from '../debug';
 import type { CitiesResult } from './findCities';
 
 export function mergeCities(
@@ -37,12 +36,10 @@ export function mergeCities(
   found: CitiesResult,
 ): City[] {
   const { cities } = found;
-  if (cities.length <= 1) return cities;
-  const { merged: plainMerged, groups } = mergePlain(ctx, settings, cities);
+  if (cities.length <= 1) return cities.map((c, i) => ({ ...c, label: String(i + 1) }));
+  const plainMerged = mergePlain(ctx, settings, cities);
   if (plainMerged.length <= 2) return plainMerged;
-  // Debug labels: each plain-merged city named by its original city numbers.
-  const labels = groups.map((g) => g.map((i) => i + 1).join('+'));
-  return mergeTriangles(ctx, settings, plainMerged, labels);
+  return mergeTriangles(ctx, settings, plainMerged);
 }
 
 /** Formats a distance as e.g. "63 amot/30 metres" for debug messages. */
@@ -51,11 +48,7 @@ function fmtDist(meters: number, amah: number): string {
 }
 
 /** Phase 1: merge cities whose gap is ≤ 141⅓ amot (transitively). */
-function mergePlain(
-  ctx: PipelineContext,
-  settings: Settings,
-  cities: City[],
-): { merged: City[]; groups: number[][] } {
+function mergePlain(ctx: PipelineContext, settings: Settings, cities: City[]): City[] {
   // City outlines are already dilated by half the 70⅔ gap on each side, so a
   // real gap of 141⅓ amot appears as 141⅓ − 70⅔ = 70⅔ between the outlines.
   const amah = amahMeters(settings);
@@ -73,12 +66,10 @@ function mergePlain(
       if (bboxGap(bboxes[i], bboxes[j]) > gapM) continue;
       if (polygonGapUnder(local[i], local[j], gapM)) {
         join(i, j);
-        if (DEBUG) {
-          const gap = polygonGap(local[i], local[j]);
-          debugLog(
-            `Merging cities ${i + 1} and ${j + 1} using proximity - ${fmtDist(gap + comp, amah)}`,
-          );
-        }
+        const gap = polygonGap(local[i], local[j]);
+        ctx.log(
+          `Merging cities ${i + 1} and ${j + 1} using proximity - ${fmtDist(gap + comp, amah)}`,
+        );
       }
     }
   }
@@ -100,12 +91,9 @@ function mergePlain(
  * every triple is judged by the phase-1 city shapes, so one triangle merge
  * does not feed larger composite shapes into further triangle checks.
  */
-function mergeTriangles(
-  ctx: PipelineContext,
-  settings: Settings,
-  cities: City[],
-  labels: string[],
-): City[] {
+function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]): City[] {
+  // Each plain-merged city is named by its original city numbers, e.g. "1+3".
+  const labels = cities.map((c, i) => c.label ?? String(i + 1));
   const local = cities.map((c) => c.localPolygon);
   const bboxes: BBox[] = local.map((p) => bboxOf(allPositions(p.geometry)));
   // Hulls of the building hull vertices — real (undilated) city extents, for
@@ -194,7 +182,7 @@ function mergeTriangles(
         // as if placed between the outer cities, so they do not merge.
         if (ok && settings.triangleWideMiddle === 'noMerge' && width > line.dist + comp) {
           ok = false;
-          debugLog(
+          ctx.log(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
               `${labels[b]} - its width (${fmtDist(width, amah)}) exceeds the gap ` +
               `(${fmtDist(line.dist + comp, amah)}) (Tur/Chazon Ish)`,
@@ -216,7 +204,7 @@ function mergeTriangles(
         if (!sideOk(a, b) || !sideOk(b, c) || !spanOk(a, c, b)) continue;
         const blocking = blockers(a, c).filter((d) => d !== b);
         if (blocking.length > 0) {
-          debugLog(
+          ctx.log(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
               `${labels[b]} - the ${labels[a]}-${labels[c]} line passes through ` +
               `${blocking.map((d) => labels[d]).join(', ')}`,
@@ -225,14 +213,14 @@ function mergeTriangles(
         }
         join(a, c);
         if (settings.triangleAbsorbsThird) join(a, b);
-        if (DEBUG) {
+        {
           // Real distances between buildings: outline gap + the 70⅔ dilation.
           const gapAB = polygonGap(local[a], local[b]) + comp;
           const gapBC = polygonGap(local[b], local[c]) + comp;
           const line = gapLine(a, c);
           const gapAC = line.dist + comp;
           const width = widthAlong(rawHulls[b], line.from, line.to);
-          debugLog(
+          ctx.log(
             `Merging cities ${labels[a]} and ${labels[c]} using triangle rule around ${labels[b]}. ` +
               `Distances: ${labels[a]}-${labels[b]} ${fmtDist(gapAB, amah)}, ` +
               `${labels[b]}-${labels[c]} ${fmtDist(gapBC, amah)}, ` +
@@ -241,7 +229,8 @@ function mergeTriangles(
           );
         }
         ctx.warn(
-          'Triangle rule applied: two cities merged via a third between them' +
+          `Triangle rule applied: cities ${labels[a]} and ${labels[c]} merged via ` +
+            `${labels[b]} between them` +
             (settings.triangleAbsorbsThird
               ? ' (third city included).'
               : ' (third city not included).'),
@@ -249,18 +238,16 @@ function mergeTriangles(
       }
     }
   }
-  return buildMerged(ctx, cities, find).merged;
+  return buildMerged(ctx, cities, find);
 }
 
 /**
- * Combine each union-find group into a single city. Also returns, per merged
- * city, the input-city indices it came from (for debug labelling).
+ * Combine each union-find group into a single city, labelled by the input
+ * cities' labels (falling back to their 1-based numbers) joined with '+'.
+ * Input cities are never mutated — singletons are shallow-copied — so the raw
+ * cities shared with citiesResult stay label-free.
  */
-function buildMerged(
-  ctx: PipelineContext,
-  cities: City[],
-  find: (i: number) => number,
-): { merged: City[]; groups: number[][] } {
+function buildMerged(ctx: PipelineContext, cities: City[], find: (i: number) => number): City[] {
   const byRoot = new Map<number, number[]>();
   cities.forEach((_, i) => {
     const root = find(i);
@@ -269,11 +256,10 @@ function buildMerged(
   });
 
   const merged: City[] = [];
-  const groups: number[][] = [];
   for (const idxs of byRoot.values()) {
-    groups.push(idxs);
+    const label = idxs.map((i) => cities[i].label ?? String(i + 1)).join('+');
     if (idxs.length === 1) {
-      merged.push(cities[idxs[0]]);
+      merged.push({ ...cities[idxs[0]], label });
       continue;
     }
     const localPolys = idxs.map((i) => cities[i].localPolygon);
@@ -285,9 +271,10 @@ function buildMerged(
       buildingHullsLocal: idxs.flatMap((i) => cities[i].buildingHullsLocal),
       buildingCount: idxs.reduce((s, i) => s + cities[i].buildingCount, 0),
       dataEdges: idxs.map((i) => cities[i].dataEdges).reduce(mergeDataEdges),
+      label,
     });
   }
-  return { merged, groups };
+  return merged;
 }
 
 /** Extent of a point set projected onto the from→to direction (meters). */
