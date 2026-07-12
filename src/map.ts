@@ -80,7 +80,9 @@ export class TechumMap {
       overlays['City numbers (debug)'] = this.layers['cityNumbers'];
       this.layers['cityNumbers'].addTo(this.map);
     }
-    L.control.layers({}, overlays, { collapsed: false }).addTo(this.map);
+    // On small screens the expanded layer list would cover most of the map.
+    const collapsed = window.matchMedia('(max-width: 768px)').matches;
+    L.control.layers({}, overlays, { collapsed }).addTo(this.map);
     this.eruvZone = L.layerGroup().addTo(this.map);
 
     this.map.on('click', (e: L.LeafletMouseEvent) => {

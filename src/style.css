@@ -61,6 +61,35 @@ body,
   }
 }
 
+/* Floating hamburger/X toggle — shown only on mobile. */
+#sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1300;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #fff;
+  color: #2c3e50;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+#sidebar-toggle .icon-close,
+.sidebar-open #sidebar-toggle .icon-menu {
+  display: none;
+}
+
+.sidebar-open #sidebar-toggle .icon-close {
+  display: block;
+}
+
 #sidebar {
   width: 340px;
   flex-shrink: 0;
@@ -249,4 +278,43 @@ body,
    but keep the OSM attribution (required) and the metre/amot scale bars. */
 .map-capturing .leaflet-control:not(.leaflet-control-attribution):not(.leaflet-control-scale) {
   display: none;
+}
+
+@media (max-width: 768px) {
+  #sidebar-toggle {
+    display: flex;
+  }
+
+  /* Off-canvas sidebar, slid in/out by the toggle. */
+  #sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(340px, 88vw);
+    z-index: 1250;
+    border-right: none;
+    box-shadow: 2px 0 14px rgba(0, 0, 0, 0.3);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    /* Keep the heading clear of the floating toggle button. */
+    padding-top: 64px;
+  }
+
+  .sidebar-open #sidebar {
+    transform: translateX(0);
+  }
+
+  /* The toggle sits in the map's top-left corner; move the zoom control down. */
+  .leaflet-top.leaflet-left {
+    margin-top: 52px;
+  }
+
+  /* Don't let the progress pill collide with the toggle or overflow. */
+  #calc-overlay {
+    left: 64px;
+    right: 12px;
+    transform: none;
+    white-space: normal;
+  }
 }

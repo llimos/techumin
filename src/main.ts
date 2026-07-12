@@ -11,6 +11,16 @@ import type { LatLon, Poly } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
+  <button id="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false">
+    <svg class="icon-menu" width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+    <svg class="icon-close" width="22" height="22" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  </button>
   <aside id="sidebar"></aside>
   <div id="map-wrap">
     <div id="map"></div>
@@ -18,6 +28,16 @@ app.innerHTML = `
   </div>
 `;
 const overlay = app.querySelector<HTMLElement>('#calc-overlay')!;
+
+const sidebarToggle = app.querySelector<HTMLButtonElement>('#sidebar-toggle')!;
+function setSidebarOpen(open: boolean): void {
+  app.classList.toggle('sidebar-open', open);
+  sidebarToggle.setAttribute('aria-expanded', String(open));
+  sidebarToggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+}
+sidebarToggle.addEventListener('click', () =>
+  setSidebarOpen(!app.classList.contains('sidebar-open')),
+);
 
 let lastOutputs: PipelineOutputs = {};
 let eruvPoint: LatLon | null = null;
@@ -39,7 +59,11 @@ const sidebar = new Sidebar(document.querySelector('#sidebar')!, pipeline.getSet
     // entirely, which disarms below).
     if (armingEruv) void refreshZone();
   },
-  onLocate: (point) => map.map.setView([point.lat, point.lon]),
+  onLocate: (point) => {
+    // On mobile the sidebar covers the map — reveal the located spot.
+    setSidebarOpen(false);
+    map.map.setView([point.lat, point.lon]);
+  },
   onEruvButton: () => void onEruvButton(),
   onGenerateReport: () => void generateReport(),
 });
