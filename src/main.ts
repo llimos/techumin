@@ -39,7 +39,7 @@ const sidebar = new Sidebar(document.querySelector('#sidebar')!, pipeline.getSet
     // entirely, which disarms below).
     if (armingEruv) void refreshZone();
   },
-  onLocate: (point) => pick(point),
+  onLocate: (point) => map.map.setView([point.lat, point.lon]),
   onEruvButton: () => void onEruvButton(),
   onGenerateReport: () => void generateReport(),
 });
