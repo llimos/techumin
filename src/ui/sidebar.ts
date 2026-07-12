@@ -107,6 +107,15 @@ export class Sidebar {
             <option value="diagonal">Join on the diagonal</option>
           </select>
         </label>
+        <label>Havla'ah: width of the techum past a swallowed city
+          <select data-setting="havlaahWidth">
+            <option value="magenAvraham">City width only (Magen Avraham)</option>
+            <option value="chazonIsh">City + 2000, capped at techum width (Chazon Ish)</option>
+            <option value="rema">City + 2000 amot each side (Rema)</option>
+          </select>
+        </label>
+        <label><input type="checkbox" data-setting="havlaahEruvStartCity" />
+          Rema: eruv's start city is swallowed even when partly beyond the techum</label>
         <label><input type="checkbox" data-setting="eruvCityTechum" />
           Eruv techumin may be placed anywhere in the city's techum</label>
         <p class="hint eruv-notice" id="eruv-city-notice" hidden>Even according to this

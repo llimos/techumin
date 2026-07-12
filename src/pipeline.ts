@@ -147,6 +147,7 @@ export class TechumPipeline {
         ctx,
         this.settings,
         pointShvita(ctx, this.settings, [0, 0]),
+        this.outputs.squarings ?? [],
       );
     }
     return this.personalZoneCache;
@@ -252,7 +253,7 @@ export class TechumPipeline {
         o.shvita = findShvita(ctx, this.settings, o.fetched!, o.squarings!);
         break;
       case 6:
-        o.techum = await measureTechum(ctx, this.settings, o.shvita!);
+        o.techum = await measureTechum(ctx, this.settings, o.shvita!, o.squarings!);
         break;
       case 7: {
         const eruv = this.eruvPoint!;
@@ -274,7 +275,9 @@ export class TechumPipeline {
         break;
       }
       case 8:
-        o.eruvTechum = await measureTechum(ctx, this.settings, o.eruvShvita!);
+        o.eruvTechum = await measureTechum(ctx, this.settings, o.eruvShvita!, o.squarings!, {
+          startPoint: this.point ?? undefined,
+        });
         break;
     }
   }
