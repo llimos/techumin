@@ -7,6 +7,7 @@ import { openReportWindow, renderReport } from './ui/report';
 import { TechumPipeline, type PipelineOutputs } from './pipeline';
 import { amahMeters, loadSettings, saveSettings } from './settings';
 import { DEBUG } from './debug';
+import { track } from './analytics';
 import type { LatLon, Poly } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -90,6 +91,7 @@ if (
 }
 
 function pick(point: LatLon): void {
+  track('point_selected', { lat: point.lat, lon: point.lon });
   // A new start point starts a new scenario — any eruv belongs to the old one.
   if (eruvPoint || armingEruv) clearEruvState();
   map.setPoint(point);
@@ -158,6 +160,7 @@ function placeEruv(point: LatLon): void {
     sidebar.setStatus('Eruv not placed — it must be inside the highlighted area.');
     return; // stay armed
   }
+  track('eruv_selected', { lat: point.lat, lon: point.lon });
   stopArming();
   eruvPoint = point;
   map.setEruvPoint(point);
