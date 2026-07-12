@@ -211,7 +211,7 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
         // as if placed between the outer cities, so they do not merge.
         if (ok && settings.triangleWideMiddle === 'noMerge' && width > line.dist + comp) {
           ok = false;
-          ctx.log(
+          ctx.debug(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
               `${labels[b]} - its width (${fmtDist(width, amah)}) exceeds the gap ` +
               `(${fmtDist(line.dist + comp, amah)}) (Tur/Chazon Ish)`,
@@ -227,12 +227,12 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
     for (let c = a + 1; c < n; c++) {
       for (let b = 0; b < n; b++) {
         if (b === a || b === c) continue;
-        // Skip when the join would change nothing (also prevents repeat warns).
+        // Skip when the join would change nothing (also prevents repeat logs).
         const pairMerged = find(a) === find(c);
         if (pairMerged && (!settings.triangleAbsorbsThird || find(b) === find(a))) continue;
         if (!sideOk(a, b) || !sideOk(b, c)) continue;
         if (!inCorridor(b, corridor(a, c))) {
-          ctx.log(
+          ctx.debug(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
               `${labels[b]} - it lies outside the area extending from the gap between them`,
           );
@@ -241,7 +241,7 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
         if (!spanOk(a, c, b)) continue;
         const blocking = blockers(a, c).filter((d) => d !== b);
         if (blocking.length > 0) {
-          ctx.log(
+          ctx.debug(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
               `${labels[b]} - the ${labels[a]}-${labels[c]} line passes through ` +
               `${blocking.map((d) => labels[d]).join(', ')}`,
@@ -265,13 +265,6 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
               `width of ${labels[b]} along the ${labels[a]}-${labels[c]} line: ${fmtDist(width, amah)}`,
           );
         }
-        ctx.warn(
-          `Triangle rule applied: cities ${labels[a]} and ${labels[c]} merged via ` +
-            `${labels[b]} between them` +
-            (settings.triangleAbsorbsThird
-              ? ' (third city included).'
-              : ' (third city not included).'),
-        );
       }
     }
   }
