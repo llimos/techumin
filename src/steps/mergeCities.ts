@@ -265,13 +265,6 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
               `width of ${labels[b]} along the ${labels[a]}-${labels[c]} line: ${fmtDist(width, amah)}`,
           );
         }
-        ctx.log(
-          `Triangle rule applied: cities ${labels[a]} and ${labels[c]} merged via ` +
-            `${labels[b]} between them` +
-            (settings.triangleAbsorbsThird
-              ? ' (third city included).'
-              : ' (third city not included).'),
-        );
       }
     }
   }
