@@ -111,7 +111,7 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   const keshetCuts = keshetCutsRot.map((cut) =>
     featureFromLocal(ctx.frame, rotateFeature(cut, angle)),
   );
-  return { city, polygon, keshetCuts, angle, isRectangle };
+  return { city, polygon, keshetCuts, angle, isRectangle, dataEdges: city.dataEdges };
 }
 
 /** Keep angles in [-45°, 45°): a rectangle's orientation is symmetric mod 90°. */

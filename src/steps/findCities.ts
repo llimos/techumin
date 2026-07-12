@@ -19,6 +19,7 @@ import { allPositions } from '../geo/rotate';
 import { bboxOf, dilateHullPoints, pointInRings } from '../geo/dilate';
 import { convexHull } from '../geo/minRect';
 import { convexOverlap, hullsWithinGap } from '../geo/gaps';
+import { dataEdgesOfPoints } from '../geo/dataEdges';
 import { unionFind } from '../geo/unionFind';
 import { unionAll } from '../geo/unionAll';
 import type { FetchResult } from './fetchBuildings';
@@ -60,12 +61,16 @@ export function findCities(
   for (const members of clusters) {
     const parts = members.map((i) => hullFeature(dilated[i]));
     const localPolygon = unionAll(parts, (n) => (dropped += n)) ?? parts[0];
+    const hullPointsLocal = convexHull(members.flatMap((i) => hulls[i]));
     const cluster: City = {
       polygon: featureFromLocal(ctx.frame, localPolygon),
       localPolygon,
-      hullPointsLocal: convexHull(members.flatMap((i) => hulls[i])),
+      hullPointsLocal,
       buildingHullsLocal: members.map((i) => hulls[i]),
       buildingCount: members.length,
+      // Extreme vertices survive the convex hull, so the hull points suffice
+      // to tell whether the cluster reaches the fetch boundary.
+      dataEdges: dataEdgesOfPoints(hullPointsLocal, fetched.radiusM),
     };
     (members.length >= MIN_CITY_BUILDINGS ? cities : structures).push(cluster);
   }

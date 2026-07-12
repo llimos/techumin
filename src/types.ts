@@ -8,6 +8,19 @@ export interface LatLon {
   lon: number;
 }
 
+/**
+ * Compass sides of the building-fetch area where the loaded data runs out:
+ * a side is true when buildings come close to that edge of the fetch square,
+ * so the real city may continue beyond it and derived bounds (ribua, shvita,
+ * techum) may be understated in that direction.
+ */
+export interface DataEdges {
+  n: boolean;
+  e: boolean;
+  s: boolean;
+  w: boolean;
+}
+
 export interface City {
   /**
    * City outline with ibur gaps filled (buildings dilated by half the 70⅔
@@ -25,6 +38,8 @@ export interface City {
   /** Convex hull of each individual building (local frame) — undilated extents. */
   buildingHullsLocal: Position[][];
   buildingCount: number;
+  /** Fetch-area sides this city's buildings come near — it may extend past them. */
+  dataEdges: DataEdges;
 }
 
 export interface Squaring {
@@ -37,6 +52,8 @@ export interface Squaring {
   angle: number;
   /** True when the polygon is exactly its bounding rectangle (no keshet cut). */
   isRectangle: boolean;
+  /** Inherited from the city: sides where the data (and so the ribua) may fall short. */
+  dataEdges: DataEdges;
 }
 
 export type ShvitaSource = 'city' | 'building' | 'point';
@@ -45,6 +62,8 @@ export interface Shvita {
   polygon: Poly;
   angle: number;
   source: ShvitaSource;
+  /** Sides where the shvita (and the techum measured from it) may be understated. */
+  dataEdges: DataEdges;
 }
 
 export interface StepWarnings {

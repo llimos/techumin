@@ -2,8 +2,10 @@
 
 import osmtogeojson from 'osmtogeojson';
 import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
-import type { LatLon, PipelineContext, Poly } from '../types';
+import type { PipelineContext, Poly } from '../types';
 import type { Settings } from '../settings';
+import { anyDataEdge, dataEdgesOfPoints, describeDataEdges } from '../geo/dataEdges';
+import { toLocal } from '../geo/project';
 
 const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
@@ -54,11 +56,19 @@ export async function fetchBuildings(
 
   // If any building comes near the fetch boundary, the real city may extend
   // beyond the loaded data and the techum could be understated.
-  const edge = nearFetchEdge(buildings, ctx.point, radiusM);
-  if (edge) {
+  const edges = dataEdgesOfPoints(
+    buildings.flatMap((b) => {
+      const coords =
+        b.geometry.type === 'Polygon' ? b.geometry.coordinates[0] : b.geometry.coordinates[0][0];
+      return coords.map((p) => toLocal(ctx.frame, p));
+    }),
+    radiusM,
+  );
+  if (anyDataEdge(edges)) {
     ctx.warn(
-      `Buildings reach the ${(radiusM / 1000).toFixed(1)} km data boundary — ` +
-        'the city may extend beyond the loaded area; increase the data radius to be sure.',
+      `Buildings reach the ${describeDataEdges(edges)} edge(s) of the ` +
+        `${(radiusM / 1000).toFixed(1)} km data boundary — the city may extend beyond ` +
+        'the loaded area (those borders are drawn dotted); increase the data radius to be sure.',
     );
   }
 
@@ -86,20 +96,4 @@ async function fetchWithFallback(ctx: PipelineContext, query: string): Promise<a
     }
   }
   throw lastError ?? new Error('All Overpass servers failed');
-}
-
-function nearFetchEdge(buildings: Poly[], center: LatLon, radiusM: number): boolean {
-  const margin = 0.95;
-  const kx = 111320 * Math.cos((center.lat * Math.PI) / 180);
-  const ky = 111320;
-  for (const b of buildings) {
-    const coords =
-      b.geometry.type === 'Polygon' ? b.geometry.coordinates[0] : b.geometry.coordinates[0][0];
-    for (const [lon, lat] of coords) {
-      const dx = (lon - center.lon) * kx;
-      const dy = (lat - center.lat) * ky;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) > radiusM * margin) return true;
-    }
-  }
-  return false;
 }
