@@ -1,6 +1,13 @@
 /** Two-point measuring tool: a map control toggles click-click distance lines. */
 
 import L from 'leaflet';
+import { t } from '../i18n';
+
+const TXT = {
+  measure: { en: 'Measure distance', he: 'מדידת מרחק' },
+  m: { en: 'm', he: "מ'" },
+  amot: { en: 'amot', he: 'אמות' },
+} as const;
 
 const RULER_SVG = `
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
@@ -34,9 +41,9 @@ export class MeasureTool {
         const div = L.DomUtil.create('div', 'leaflet-bar');
         const a = L.DomUtil.create('a', 'measure-toggle', div);
         a.href = '#';
-        a.title = 'Measure distance';
+        a.title = t(TXT.measure);
         a.setAttribute('role', 'button');
-        a.setAttribute('aria-label', 'Measure distance');
+        a.setAttribute('aria-label', t(TXT.measure));
         a.innerHTML = RULER_SVG;
         L.DomEvent.on(a, 'click', (e) => {
           L.DomEvent.stop(e);
@@ -61,6 +68,13 @@ export class MeasureTool {
     if (this.line) this.line.setTooltipContent(this.format(this.lineMeters));
   }
 
+  /** Re-render language-dependent text after a language switch. */
+  refreshLanguage(): void {
+    this.button.title = t(TXT.measure);
+    this.button.setAttribute('aria-label', t(TXT.measure));
+    if (this.line) this.line.setTooltipContent(this.format(this.lineMeters));
+  }
+
   toggle(): void {
     this.active = !this.active;
     this.button.classList.toggle('measure-active', this.active);
@@ -70,7 +84,7 @@ export class MeasureTool {
 
   private format(meters: number): string {
     const amot = meters / this.amahM;
-    return `${Math.round(meters).toLocaleString()} m · ${Math.round(amot).toLocaleString()} amot`;
+    return `${Math.round(meters).toLocaleString()} ${t(TXT.m)} · ${Math.round(amot).toLocaleString()} ${t(TXT.amot)}`;
   }
 
   private onClick(e: L.LeafletMouseEvent): void {

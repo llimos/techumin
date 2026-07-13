@@ -9,6 +9,7 @@ import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
 import type { Position } from 'geojson';
 import type { City, DataEdges, LatLon, PipelineContext, Poly, Shvita, Squaring } from './types';
 import { SETTING_FIRST_STEP, type Settings } from './settings';
+import type { LString } from './i18n';
 import { debugLog } from './debug';
 import { anyDataEdge, describeDataEdges } from './geo/dataEdges';
 import { pointInRings } from './geo/dilate';
@@ -37,9 +38,9 @@ export interface PipelineOutputs {
 }
 
 export interface ReportStep {
-  title: string;
-  logs: string[];
-  warnings: string[];
+  title: LString;
+  logs: LString[];
+  warnings: LString[];
 }
 
 export interface ReportData {
@@ -51,10 +52,10 @@ export interface ReportData {
 
 export interface PipelineUpdate {
   outputs: PipelineOutputs;
-  warnings: string[];
+  warnings: LString[];
   running: boolean;
   /** Label of the step currently being calculated, while running. */
-  stage?: string;
+  stage?: LString;
   error?: string;
 }
 
@@ -69,15 +70,15 @@ const STEP_NAMES = [
   '8 measureTechum (eruv)',
 ];
 
-const STAGE_LABELS = [
-  'Fetching buildings',
-  'Finding cities',
-  'Merging cities',
-  'Squaring the cities',
-  'Finding the shvisa bounds',
-  'Measuring the techum',
-  'Finding the eruv shvisa bounds',
-  'Measuring the eruv techum',
+const STAGE_LABELS: LString[] = [
+  { en: 'Fetching buildings', he: 'טוען בניינים' },
+  { en: 'Finding cities', he: 'מאתר ערים' },
+  { en: 'Merging cities', he: 'מאחד ערים' },
+  { en: 'Squaring the cities', he: 'מרבע את הערים' },
+  { en: 'Finding the shvisa bounds', he: 'קובע את גבולות השביתה' },
+  { en: 'Measuring the techum', he: 'מודד את התחום' },
+  { en: 'Finding the eruv shvisa bounds', he: 'קובע את גבולות השביתה של העירוב' },
+  { en: 'Measuring the eruv techum', he: 'מודד את תחום העירוב' },
 ];
 
 /**
@@ -104,13 +105,13 @@ export class TechumPipeline {
   private settings: Settings;
   private outputs: PipelineOutputs = {};
   /** Warnings collected per step, so partial re-runs keep earlier warnings. */
-  private stepWarnings: string[][] = [[], [], [], [], [], [], [], []];
+  private stepWarnings: LString[][] = [[], [], [], [], [], [], [], []];
   /** Calculation log per step (ctx.log) — the reasoning shown in the report. */
-  private stepLogs: string[][] = [[], [], [], [], [], [], [], []];
+  private stepLogs: LString[][] = [[], [], [], [], [], [], [], []];
   /** Techum from a 4-amot shvita at the start point; cached per home run. */
   private personalZoneCache: Promise<Poly> | null = null;
   private runToken = 0;
-  private stage?: string;
+  private stage?: LString;
 
   onUpdate: (update: PipelineUpdate) => void = () => {};
 
@@ -232,7 +233,7 @@ export class TechumPipeline {
       logs: [],
       log: (m) => {
         ctx.logs.push(m);
-        debugLog(m);
+        debugLog(m.en);
       },
       debug: debugLog,
     };
@@ -275,7 +276,7 @@ export class TechumPipeline {
         console.debug(
           `[techum] ${STEP_NAMES[step - 1]} (${Math.round(performance.now() - t0)} ms)`,
           this.stepOutput(step),
-          ctx.warnings.length ? { warnings: ctx.warnings } : '',
+          ctx.warnings.length ? { warnings: ctx.warnings.map((w) => w.en) } : '',
         );
         if (step === 5) {
           const expand = await this.maybeExpand(ctx, token);
@@ -334,13 +335,21 @@ export class TechumPipeline {
       w: want.w && -ext.minX < MAX_EXTENT_M,
     };
     if (!anyDataEdge(sides)) {
-      this.stepWarnings[4].push(
-        `The city still reaches the data boundary at the ${MAX_EXTENT_M / 1000} km ` +
+      this.stepWarnings[4].push({
+        en:
+          `The city still reaches the data boundary at the ${MAX_EXTENT_M / 1000} km ` +
           'fetch limit — the dotted borders may understate the real bounds.',
-      );
+        he:
+          `העיר עדיין מגיעה לגבול הנתונים במגבלת הטעינה של ${MAX_EXTENT_M / 1000} ק"מ ` +
+          '— הגבולות המקווקווים עשויים להיות קטנים מהגבולות האמיתיים.',
+      });
       return 'no';
     }
-    this.stage = `Extending building data (${describeDataEdges(sides)})`;
+    const sideNames = describeDataEdges(sides);
+    this.stage = {
+      en: `Extending building data (${sideNames.en})`,
+      he: `מרחיב את נתוני הבניינים (${sideNames.he})`,
+    };
     this.emit(true);
     await nextPaint();
     // Fetch warnings (mirror failures, Overpass remarks) belong to the fetch step.
@@ -351,17 +360,22 @@ export class TechumPipeline {
       const fetched = await extendBuildings(ctx, o.fetched!, sides);
       if (token !== this.runToken) return 'aborted';
       console.debug(
-        `[techum] extended data ${describeDataEdges(sides)} ` +
+        `[techum] extended data ${sideNames.en} ` +
           `(${Math.round(performance.now() - t0)} ms, ${fetched.buildings.length} buildings)`,
         fetched.extent,
       );
       o.fetched = fetched;
     } catch (err) {
       if (token !== this.runToken) return 'aborted';
-      this.stepWarnings[0].push(
-        `Could not extend the building data (${err instanceof Error ? err.message : String(err)}) ` +
+      const detail = err instanceof Error ? err.message : String(err);
+      this.stepWarnings[0].push({
+        en:
+          `Could not extend the building data (${detail}) ` +
           '— the dotted borders may understate the real bounds.',
-      );
+        he:
+          `לא ניתן היה להרחיב את נתוני הבניינים (${detail}) ` +
+          '— הגבולות המקווקווים עשויים להיות קטנים מהגבולות האמיתיים.',
+      });
       return 'no';
     }
     o.citiesResult = undefined;
@@ -397,20 +411,27 @@ export class TechumPipeline {
         const eruvPt = turfPoint([eruv.lon, eruv.lat]);
         const zone = await this.getPlacementZone();
         if (zone && !booleanPointInPolygon(eruvPt, zone)) {
-          ctx.warn('The eruv is outside the area where an eruv may be placed — the eruv is invalid.');
+          ctx.warn({
+            en: 'The eruv is outside the area where an eruv may be placed — the eruv is invalid.',
+            he: 'העירוב נמצא מחוץ לאזור שבו מותר להניח עירוב — העירוב פסול.',
+          });
         } else if (
           this.settings.eruvCityTechum &&
           !booleanPointInPolygon(eruvPt, await this.personalZone())
         ) {
-          ctx.warn(
-            'The eruv is more than 2000 amot from the start point — ' +
+          ctx.warn({
+            en:
+              'The eruv is more than 2000 amot from the start point — ' +
               'most poskim do not allow returning to the start point.',
-          );
+            he:
+              'העירוב רחוק יותר מ־2000 אמה מנקודת המוצא — ' +
+              'רוב הפוסקים אינם מתירים לחזור לנקודת המוצא.',
+          });
         }
         const eruvCtx: PipelineContext = {
           ...ctx,
-          warn: (m) => ctx.warn(`Eruv: ${m}`),
-          log: (m) => ctx.log(`Eruv: ${m}`),
+          warn: (m) => ctx.warn({ en: `Eruv: ${m.en}`, he: `עירוב: ${m.he}` }),
+          log: (m) => ctx.log({ en: `Eruv: ${m.en}`, he: `עירוב: ${m.he}` }),
           debug: (m) => ctx.debug(`Eruv: ${m}`),
         };
         o.eruvShvita = findShvita(eruvCtx, this.settings, o.fetched!, o.squarings!, eruv);

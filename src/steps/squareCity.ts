@@ -44,10 +44,15 @@ export function squareCities(
   const squarings = merged.map((city) => squareOne(ctx, settings, city));
   const truncated = squarings.filter((s) => anyDataEdge(s.dataEdges)).length;
   if (truncated > 0) {
-    ctx.warn(
-      `Building data ran out at the edge of the loaded area for ${truncated} ` +
+    ctx.warn({
+      en:
+        `Building data ran out at the edge of the loaded area for ${truncated} ` +
         `${truncated === 1 ? 'city' : 'cities'} — the dotted borders may understate the real bounds.`,
-    );
+      he:
+        `נתוני הבניינים נגמרו בקצה האזור שנטען עבור ${
+          truncated === 1 ? 'עיר אחת' : `${truncated} ערים`
+        } — הגבולות המקווקווים עשויים להיות קטנים מהגבולות האמיתיים.`,
+    });
   }
   return squarings;
 }
@@ -65,21 +70,30 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   if (squareTol !== null) {
     angle = normalizeAngle(minRect.angle);
     if (squareTol > 0) {
-      ctx.log(
-        `City ${city.label ?? '?'} treated as already squared — its outline stays within ` +
+      ctx.log({
+        en:
+          `City ${city.label ?? '?'} treated as already squared — its outline stays within ` +
           `~${Math.round(squareTol)} m of its bounding rectangle.`,
-      );
+        he:
+          `עיר ${city.label ?? '?'} נידונת כמרובעת כבר — קו המתאר שלה נשאר בתוך ` +
+          `כ־${Math.round(squareTol)} מ' מהמלבן החוסם שלה.`,
+      });
     }
   } else {
     // 2. Chazon Ish: one straight side along the city's full length fixes the angle.
     const straight = settings.chazonIshStraightSide ? findStraightSideAngle(local, pts) : null;
     if (straight) {
       angle = normalizeAngle(straight.theta);
-      ctx.log(
-        `Straight side found for city ${city.label ?? '?'} (spans ` +
+      ctx.log({
+        en:
+          `Straight side found for city ${city.label ?? '?'} (spans ` +
           `${Math.round(straight.spanFrac * 100)}% of the city, deviations ≤ ` +
           `${Math.round(straight.tol)} m) — squaring aligned to it.`,
-      );
+        he:
+          `נמצאה צלע ישרה לעיר ${city.label ?? '?'} (משתרעת על ` +
+          `${Math.round(straight.spanFrac * 100)}% מהעיר, סטיות ≤ ` +
+          `${Math.round(straight.tol)} מ') — הריבוע יושר לפיה.`,
+      });
     } else {
       angle = 0;
     }
@@ -113,20 +127,34 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
         squaringRot = next as Poly;
         isRectangle = false;
         keshetCutsRot.push(cut.poly);
-        ctx.warn(
-          `Keshet/gam detected in city ${city.label ?? '?'}: part of the squaring is excluded ` +
+        ctx.warn({
+          en:
+            `Keshet/gam detected in city ${city.label ?? '?'}: part of the squaring is excluded ` +
             (settings.keshetExclusion === 'entire'
               ? '(entire keshet excluded).'
               : '(excluded only where wider than 4000 amot).'),
-        );
-        ctx.log(
-          `Keshet/gam in city ${city.label ?? '?'}: mouth ${Math.round(cut.mouthM / amah)} amot, ` +
+          he:
+            `זוהתה קשת/גאם בעיר ${city.label ?? '?'}: חלק מהריבוע הוצא ` +
+            (settings.keshetExclusion === 'entire'
+              ? '(הקשת כולה הוצאה).'
+              : '(הוצא רק היכן שרחב מ־4000 אמה).'),
+        });
+        ctx.log({
+          en:
+            `Keshet/gam in city ${city.label ?? '?'}: mouth ${Math.round(cut.mouthM / amah)} amot, ` +
             `depth ${Math.round(cut.depthM / amah)} amot, measured on the gap-filled outline ` +
             '(the 70⅔-amot dilation narrows the hollow; the thresholds are compensated) — ' +
             (settings.keshetExclusion === 'entire'
               ? 'the entire keshet is excluded from the squaring.'
               : 'excluded from the squaring only where wider than 4000 amot.'),
-        );
+          he:
+            `קשת/גאם בעיר ${city.label ?? '?'}: פה ${Math.round(cut.mouthM / amah)} אמות, ` +
+            `עומק ${Math.round(cut.depthM / amah)} אמות, נמדד על קו המתאר במילוי הרווחים ` +
+            '(עיבוי 70⅔ האמות מֵצר את המפרץ; הספים מפוצים בהתאם) — ' +
+            (settings.keshetExclusion === 'entire'
+              ? 'הקשת כולה הוצאה מהריבוע.'
+              : 'הוצא מהריבוע רק היכן שרחב מ־4000 אמה.'),
+        });
       }
     }
   }

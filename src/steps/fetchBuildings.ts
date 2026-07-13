@@ -38,7 +38,10 @@ export async function fetchBuildings(
   const extent: BBox = { minX: -r, minY: -r, maxX: r, maxY: r };
   const buildings = await fetchArea(ctx, extent);
   if (buildings.length === 0) {
-    ctx.warn('No buildings found in the loaded area — the point is treated as open country.');
+    ctx.warn({
+      en: 'No buildings found in the loaded area — the point is treated as open country.',
+      he: 'לא נמצאו בניינים באזור שנטען — הנקודה נידונת כשדה פתוח.',
+    });
   }
 
   const pt = turfPoint([ctx.point.lon, ctx.point.lat]);
@@ -114,7 +117,9 @@ async function fetchArea(ctx: PipelineContext, area: BBox): Promise<Poly[]> {
     out skel qt;
   `;
   const data = await fetchWithFallback(ctx, query);
-  if (data.remark) ctx.warn(`Overpass remark: ${data.remark}`);
+  if (data.remark) {
+    ctx.warn({ en: `Overpass remark: ${data.remark}`, he: `הערת Overpass: ${data.remark}` });
+  }
 
   const fc = osmtogeojson(data);
   return fc.features.filter(
@@ -169,7 +174,10 @@ async function fetchWithFallback(ctx: PipelineContext, query: string): Promise<a
         lastRequestAt = Date.now();
       }
     }
-    ctx.warn(`Overpass server ${new URL(url).host} failed (${lastError?.message}) — trying next.`);
+    ctx.warn({
+      en: `Overpass server ${new URL(url).host} failed (${lastError?.message}) — trying next.`,
+      he: `שרת Overpass ‏${new URL(url).host} נכשל (${lastError?.message}) — מנסה את הבא.`,
+    });
   }
   throw lastError ?? new Error('All Overpass servers failed');
 }

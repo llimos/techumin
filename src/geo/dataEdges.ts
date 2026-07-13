@@ -9,6 +9,7 @@
 import type { Position } from 'geojson';
 import type { BBox } from './dilate';
 import type { DataEdges } from '../types';
+import type { LString } from '../i18n';
 
 /** Within this many meters of the loaded extent counts as reaching the edge. */
 const EDGE_MARGIN_M = 150;
@@ -38,12 +39,26 @@ export function dataEdgesOfPoints(points: Position[], extent: BBox): DataEdges {
 }
 
 /** E.g. "north and east" — for warning messages. */
-export function describeDataEdges(edges: DataEdges): string {
-  const names: string[] = [];
-  if (edges.n) names.push('north');
-  if (edges.s) names.push('south');
-  if (edges.e) names.push('east');
-  if (edges.w) names.push('west');
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+export function describeDataEdges(edges: DataEdges): LString {
+  const pick = (lang: 'en' | 'he'): string => {
+    const dir = { n: SIDE_NAMES.n[lang], s: SIDE_NAMES.s[lang], e: SIDE_NAMES.e[lang], w: SIDE_NAMES.w[lang] };
+    const names: string[] = [];
+    if (edges.n) names.push(dir.n);
+    if (edges.s) names.push(dir.s);
+    if (edges.e) names.push(dir.e);
+    if (edges.w) names.push(dir.w);
+    if (names.length <= 1) return names[0] ?? '';
+    const last = names[names.length - 1];
+    const rest = names.slice(0, -1).join(', ');
+    return lang === 'he' ? `${rest} ו${last}` : `${rest} and ${last}`;
+  };
+  return { en: pick('en'), he: pick('he') };
 }
+
+/** Compass side names, for messages that name a direction. */
+export const SIDE_NAMES: Record<keyof DataEdges, LString> = {
+  n: { en: 'north', he: 'צפון' },
+  s: { en: 'south', he: 'דרום' },
+  e: { en: 'east', he: 'מזרח' },
+  w: { en: 'west', he: 'מערב' },
+};

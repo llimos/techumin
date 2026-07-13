@@ -6,6 +6,7 @@
 
 import type { Feature, Polygon, Position } from 'geojson';
 import type { City, PipelineContext } from '../types';
+import type { LString } from '../i18n';
 import {
   CITY_GAP_AMOT,
   MERGE_GAP_AMOT,
@@ -43,9 +44,12 @@ export function mergeCities(
   return mergeTriangles(ctx, settings, plainMerged);
 }
 
-/** Formats a distance as e.g. "63 amot/30 metres" for debug messages. */
-function fmtDist(meters: number, amah: number): string {
-  return `${Math.round(meters / amah)} amot/${Math.round(meters)} metres`;
+/** Formats a distance as e.g. "63 amot/30 metres", in both languages. */
+function fmtDist(meters: number, amah: number): LString {
+  return {
+    en: `${Math.round(meters / amah)} amot/${Math.round(meters)} metres`,
+    he: `${Math.round(meters / amah)} אמות/${Math.round(meters)} מטר`,
+  };
 }
 
 /** Phase 1: merge cities whose gap is ≤ 141⅓ amot (transitively). */
@@ -68,9 +72,11 @@ function mergePlain(ctx: PipelineContext, settings: Settings, cities: City[]): C
       if (polygonGapUnder(local[i], local[j], gapM)) {
         join(i, j);
         const gap = polygonGap(local[i], local[j]);
-        ctx.log(
-          `Merging cities ${i + 1} and ${j + 1} using proximity - ${fmtDist(gap + comp, amah)}`,
-        );
+        const dist = fmtDist(gap + comp, amah);
+        ctx.log({
+          en: `Merging cities ${i + 1} and ${j + 1} using proximity - ${dist.en}`,
+          he: `הערים ${i + 1} ו־${j + 1} מתאחדות מחמת סמיכות — ${dist.he}`,
+        });
       }
     }
   }
@@ -213,8 +219,8 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
           ok = false;
           ctx.debug(
             `Not merging cities ${labels[a]} and ${labels[c]} via triangle rule around ` +
-              `${labels[b]} - its width (${fmtDist(width, amah)}) exceeds the gap ` +
-              `(${fmtDist(line.dist + comp, amah)}) (Tur/Chazon Ish)`,
+              `${labels[b]} - its width (${fmtDist(width, amah).en}) exceeds the gap ` +
+              `(${fmtDist(line.dist + comp, amah).en}) (Tur/Chazon Ish)`,
           );
         }
       }
@@ -252,18 +258,25 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
         if (settings.triangleAbsorbsThird) join(a, b);
         {
           // Real distances between buildings: outline gap + the 70⅔ dilation.
-          const gapAB = polygonGap(local[a], local[b]) + comp;
-          const gapBC = polygonGap(local[b], local[c]) + comp;
+          const gapAB = fmtDist(polygonGap(local[a], local[b]) + comp, amah);
+          const gapBC = fmtDist(polygonGap(local[b], local[c]) + comp, amah);
           const line = gapLine(a, c);
-          const gapAC = line.dist + comp;
-          const width = widthAlong(rawHulls[b], line.from, line.to);
-          ctx.log(
-            `Merging cities ${labels[a]} and ${labels[c]} using triangle rule around ${labels[b]}. ` +
-              `Distances: ${labels[a]}-${labels[b]} ${fmtDist(gapAB, amah)}, ` +
-              `${labels[b]}-${labels[c]} ${fmtDist(gapBC, amah)}, ` +
-              `${labels[a]}-${labels[c]} ${fmtDist(gapAC, amah)}; ` +
-              `width of ${labels[b]} along the ${labels[a]}-${labels[c]} line: ${fmtDist(width, amah)}`,
-          );
+          const gapAC = fmtDist(line.dist + comp, amah);
+          const width = fmtDist(widthAlong(rawHulls[b], line.from, line.to), amah);
+          ctx.log({
+            en:
+              `Merging cities ${labels[a]} and ${labels[c]} using triangle rule around ${labels[b]}. ` +
+              `Distances: ${labels[a]}-${labels[b]} ${gapAB.en}, ` +
+              `${labels[b]}-${labels[c]} ${gapBC.en}, ` +
+              `${labels[a]}-${labels[c]} ${gapAC.en}; ` +
+              `width of ${labels[b]} along the ${labels[a]}-${labels[c]} line: ${width.en}`,
+            he:
+              `הערים ${labels[a]} ו־${labels[c]} מתאחדות בדין רואין סביב ${labels[b]}. ` +
+              `מרחקים: ${labels[a]}–${labels[b]} ${gapAB.he}, ` +
+              `${labels[b]}–${labels[c]} ${gapBC.he}, ` +
+              `${labels[a]}–${labels[c]} ${gapAC.he}; ` +
+              `רוחב ${labels[b]} לאורך קו ${labels[a]}–${labels[c]}: ${width.he}`,
+          });
         }
       }
     }

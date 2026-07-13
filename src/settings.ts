@@ -1,5 +1,7 @@
 /** Halachic opinion settings and fixed constants. All lengths in amot unless noted. */
 
+import { detectLang, t, type Lang, type LString } from './i18n';
+
 export type AmahPreset = 'naeh' | 'moshe' | 'chazonIsh' | 'custom';
 export type KeshetExclusion = 'entire' | 'past4000';
 export type KeshetCondition = 'mouthAndDepth' | 'mouthOnly';
@@ -46,6 +48,8 @@ export interface Settings {
   eruvCityTechum: boolean;
   /** Non-halachic: half-side of the square building-fetch area, meters. */
   fetchRadiusM: number;
+  /** Non-halachic: UI language. */
+  language: Lang;
 }
 
 export const AMAH_CM: Record<Exclude<AmahPreset, 'custom'>, number> = {
@@ -54,11 +58,11 @@ export const AMAH_CM: Record<Exclude<AmahPreset, 'custom'>, number> = {
   chazonIsh: 57.6,
 };
 
-export const AMAH_LABELS: Record<AmahPreset, string> = {
-  naeh: "R' Chaim Naeh (48 cm)",
-  moshe: "R' Moshe Feinstein (54 cm)",
-  chazonIsh: 'Chazon Ish (57.6 cm)',
-  custom: 'Custom',
+export const AMAH_LABELS: Record<AmahPreset, LString> = {
+  naeh: { en: "R' Chaim Naeh (48 cm)", he: 'ר\' חיים נאה (48 ס"מ)' },
+  moshe: { en: "R' Moshe Feinstein (54 cm)", he: 'ר\' משה פיינשטיין (54 ס"מ)' },
+  chazonIsh: { en: 'Chazon Ish (57.6 cm)', he: 'חזון איש (57.6 ס"מ)' },
+  custom: { en: 'Custom', he: 'מותאם אישית' },
 };
 
 export function amahMeters(s: Settings): number {
@@ -73,115 +77,164 @@ export function amahMeters(s: Settings): number {
  */
 export interface SettingMeta {
   key: keyof Settings;
-  label: string;
+  label: LString;
   kind: 'select' | 'checkbox' | 'number' | 'range';
   /** Per-value display labels, for selects. */
-  values?: Record<string, string>;
+  values?: Record<string, LString>;
 }
 
 export const SETTING_META: SettingMeta[] = [
-  { key: 'amahPreset', label: 'Amah length', kind: 'select', values: AMAH_LABELS },
-  { key: 'customAmahCm', label: 'Custom amah (cm)', kind: 'number' },
+  {
+    key: 'amahPreset',
+    label: { en: 'Amah length', he: 'אורך האמה' },
+    kind: 'select',
+    values: AMAH_LABELS,
+  },
+  {
+    key: 'customAmahCm',
+    label: { en: 'Custom amah (cm)', he: 'אמה מותאמת (ס"מ)' },
+    kind: 'number',
+  },
   {
     key: 'triangleAbsorbsThird',
-    label: 'Triangle rule: third city joins the merged city',
+    label: {
+      en: 'Triangle rule: third city joins the merged city',
+      he: 'דין רואין: העיר השלישית מצטרפת לעיר המאוחדת',
+    },
     kind: 'checkbox',
   },
   {
     key: 'triangleWideMiddle',
-    label: 'Triangle rule: middle city wider than the gap',
+    label: {
+      en: 'Triangle rule: middle city wider than the gap',
+      he: 'דין רואין: העיר האמצעית רחבה מן הרווח',
+    },
     kind: 'select',
     values: {
-      noMerge: 'Does not merge (Tur, Chazon Ish)',
-      merge: 'Still merges (Gr"a)',
+      noMerge: { en: 'Does not merge (Tur, Chazon Ish)', he: 'אינן מתאחדות (טור, חזון איש)' },
+      merge: { en: 'Still merges (Gr"a)', he: 'מתאחדות בכל זאת (גר"א)' },
     },
   },
   {
     key: 'chazonIshStraightSide',
-    label: 'Chazon Ish: square along a full straight side',
+    label: {
+      en: 'Chazon Ish: square along a full straight side',
+      he: 'חזון איש: ריבוע לפי צלע ישרה לכל אורך העיר',
+    },
     kind: 'checkbox',
   },
   {
     key: 'keshetCondition',
-    label: 'Keshet/gam condition',
+    label: { en: 'Keshet/gam condition', he: 'תנאי קשת/גאם' },
     kind: 'select',
     values: {
-      mouthAndDepth: 'Mouth ≥ 4000 and depth > 2000 amot',
-      mouthOnly: 'Mouth ≥ 4000 amot alone',
+      mouthAndDepth: {
+        en: 'Mouth ≥ 4000 and depth > 2000 amot',
+        he: 'פה ≥ 4000 ועומק > 2000 אמה',
+      },
+      mouthOnly: { en: 'Mouth ≥ 4000 amot alone', he: 'פה ≥ 4000 אמה בלבד' },
     },
   },
   {
     key: 'keshetExclusion',
-    label: 'Keshet/gam exclusion',
+    label: { en: 'Keshet/gam exclusion', he: 'הוצאת קשת/גאם' },
     kind: 'select',
     values: {
-      past4000: 'Exclude only wider than 4000 amot',
-      entire: 'Exclude entire keshet',
+      past4000: {
+        en: 'Exclude only wider than 4000 amot',
+        he: 'הוצאה רק היכן שרחב מ־4000 אמה',
+      },
+      entire: { en: 'Exclude entire keshet', he: 'הוצאת הקשת כולה' },
     },
   },
-  { key: 'remaExtra', label: 'Rema: extra 70⅔ amot for every city', kind: 'checkbox' },
+  {
+    key: 'remaExtra',
+    label: { en: 'Rema: extra 70⅔ amot for every city', he: 'רמ"א: תוספת 70⅔ אמה לכל עיר' },
+    kind: 'checkbox',
+  },
   {
     key: 'fourAmotMode',
-    label: 'No-structure fallback',
+    label: { en: 'No-structure fallback', he: 'מדידה בלא עיר או מבנה' },
     kind: 'select',
     values: {
-      each: '4 amot in each direction',
-      total: '4 amot total',
+      each: { en: '4 amot in each direction', he: '4 אמות לכל רוח' },
+      total: { en: '4 amot total', he: '4 אמות בסך הכל' },
     },
   },
   {
     key: 'unequalLines',
-    label: 'Unequal measurement lines',
+    label: { en: 'Unequal measurement lines', he: 'קווי מדידה שאינם שווים' },
     kind: 'select',
     values: {
-      extend: 'Extend the shorter line',
-      diagonal: 'Join on the diagonal',
+      extend: { en: 'Extend the shorter line', he: 'מאריכים את הקו הקצר' },
+      diagonal: { en: 'Join on the diagonal', he: 'מחברים באלכסון' },
     },
   },
   {
     key: 'havlaahWidth',
-    label: "Havla'ah: widthwise push level with a swallowed city",
+    label: {
+      en: "Havla'ah: widthwise push level with a swallowed city",
+      he: 'הבלעה: הרחבת התחום לרוחב כנגד עיר מובלעת',
+    },
     kind: 'select',
     values: {
-      magenAvraham: 'City width only (Magen Avraham)',
-      chazonIsh: 'City + 2000, capped at techum width (Chazon Ish)',
-      rema: 'City + 2000 amot each side (Rema)',
+      magenAvraham: { en: 'City width only (Magen Avraham)', he: 'רוחב העיר בלבד (מגן אברהם)' },
+      chazonIsh: {
+        en: 'City + 2000, capped at techum width (Chazon Ish)',
+        he: 'העיר + 2000, מוגבל לרוחב התחום (חזון איש)',
+      },
+      rema: { en: 'City + 2000 amot each side (Rema)', he: 'העיר + 2000 אמה לכל צד (רמ"א)' },
     },
   },
   {
     key: 'havlaahLength',
-    label: "Havla'ah: lengthwise extension past a swallowed city",
+    label: {
+      en: "Havla'ah: lengthwise extension past a swallowed city",
+      he: 'הבלעה: רוחב ההמשך שמעבר לעיר המובלעת',
+    },
     kind: 'select',
     values: {
-      parallel: 'Only parallel to the city',
-      fullWidth: 'Entire width of the techum',
+      parallel: { en: 'Only parallel to the city', he: 'רק כנגד העיר' },
+      fullWidth: { en: 'Entire width of the techum', he: 'מלוא רוחב התחום' },
     },
   },
   {
     key: 'havlaahEruvStartCity',
-    label: "Rema: eruv's start city is swallowed even when partly beyond the techum",
+    label: {
+      en: "Rema: eruv's start city is swallowed even when partly beyond the techum",
+      he: 'רמ"א: עיר המוצא של העירוב מובלעת גם כשהיא רק בחלקה בתוך התחום',
+    },
     kind: 'checkbox',
   },
   {
     key: 'eruvCityTechum',
-    label: "Eruv techumin may be placed anywhere in the city's techum",
+    label: {
+      en: "Eruv techumin may be placed anywhere in the city's techum",
+      he: 'מותר להניח עירוב תחומין בכל מקום בתחום העיר',
+    },
     kind: 'checkbox',
   },
-  { key: 'fetchRadiusM', label: 'Initial building data radius', kind: 'range' },
+  {
+    key: 'fetchRadiusM',
+    label: { en: 'Initial building data radius', he: 'רדיוס נתוני בניינים התחלתי' },
+    kind: 'range',
+  },
 ];
 
 /** The current value of a setting as display text, for the report. */
 export function settingValueLabel(meta: SettingMeta, settings: Settings): string {
   const value = settings[meta.key];
   switch (meta.kind) {
-    case 'select':
-      return meta.values?.[String(value)] ?? String(value);
+    case 'select': {
+      const label = meta.values?.[String(value)];
+      return label ? t(label) : String(value);
+    }
     case 'checkbox':
-      return value ? 'Yes' : 'No';
+      return value ? t({ en: 'Yes', he: 'כן' }) : t({ en: 'No', he: 'לא' });
     case 'number':
-      return `${value} cm`;
+      return `${value} ${t({ en: 'cm', he: 'ס"מ' })}`;
     case 'range':
-      return `${((value as number) / 1000).toFixed(1)} km`;
+      return `${((value as number) / 1000).toFixed(1)} ${t({ en: 'km', he: 'ק"מ' })}`;
   }
 }
 
@@ -226,6 +279,7 @@ export const DEFAULT_SETTINGS: Settings = {
   havlaahEruvStartCity: true,
   eruvCityTechum: false,
   fetchRadiusM: 3000,
+  language: detectLang(),
 };
 
 const STORAGE_KEY = 'techumin-settings';
@@ -247,6 +301,7 @@ const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
   havlaahEruvStartCity: (v) => typeof v === 'boolean',
   eruvCityTechum: (v) => typeof v === 'boolean',
   fetchRadiusM: (v) => typeof v === 'number' && v >= 1000 && v <= 6000,
+  language: (v) => v === 'en' || v === 'he',
 };
 
 /** Defaults overlaid with saved preferences; invalid entries are ignored. */
@@ -279,9 +334,11 @@ export function saveSettings(settings: Settings): void {
  * First pipeline step (1-based) affected by each setting; a change re-runs the
  * pipeline from that step. Steps: 1 fetch, 2 cities, 3 merge, 4 square,
  * 5 shvita, 6 techum, 7-8 the same two steps measured from the eruv.
+ * Infinity: the setting never affects the calculation (display-only).
  */
 export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   fetchRadiusM: 1,
+  language: Infinity,
   amahPreset: 2,
   customAmahCm: 2,
   triangleAbsorbsThird: 3,
