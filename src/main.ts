@@ -67,6 +67,11 @@ const sidebar = new Sidebar(document.querySelector('#sidebar')!, pipeline.getSet
   },
   onEruvButton: () => void onEruvButton(),
   onGenerateReport: () => void generateReport(),
+  osmEditUrl: () => {
+    const c = map.map.getCenter();
+    const z = Math.round(map.map.getZoom());
+    return `https://www.openstreetmap.org/edit#map=${z}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`;
+  },
 });
 map.setAmahMeters(amahMeters(pipeline.getSettings()));
 

@@ -121,6 +121,16 @@ body,
   padding-bottom: 4px;
 }
 
+/* Subsection headers within the halachic-opinion controls. */
+#sidebar h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: #777;
+  margin: 16px 0 4px;
+}
+
 #sidebar label {
   display: block;
   margin: 8px 0;
@@ -237,6 +247,13 @@ body,
   margin: 2px 0 8px 22px;
 }
 
+/* Small Hebrew source citation under an opinion control. */
+#sidebar .opinion-note {
+  margin: -3px 0 8px;
+  color: #999;
+  font-size: 12px;
+}
+
 .eruv-marker {
   font-size: 24px;
   line-height: 28px;
@@ -271,6 +288,30 @@ body,
   margin: 0;
   padding-left: 18px;
   color: #666;
+  font-size: 12.5px;
+}
+
+.about p {
+  margin: 6px 0;
+}
+
+.about a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+.about a:hover {
+  text-decoration: underline;
+}
+
+.about .gh-icon {
+  vertical-align: -2px;
+  margin-right: 5px;
+}
+
+.about .credit {
+  margin-top: 12px;
+  color: #777;
   font-size: 12.5px;
 }
 

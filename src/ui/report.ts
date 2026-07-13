@@ -176,7 +176,7 @@ function reportHtml({ report, imageDataUrl, appUrl }: ReportInput): string {
 
   <section>
     <h2>Disclaimers</h2>
-    <ul class="disclaimers">${DISCLAIMERS.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
+    <ul class="disclaimers">${DISCLAIMERS.map((d) => `<li>${esc(d.text)}</li>`).join('')}</ul>
   </section>
 </body>
 </html>`;
