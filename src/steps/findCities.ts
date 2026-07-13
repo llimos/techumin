@@ -10,7 +10,8 @@
  * union merges adjacent geometry.
  */
 
-import type { Position } from 'geojson';
+import { buffer } from '@turf/turf';
+import type { MultiPolygon, Polygon, Position } from 'geojson';
 import type { City, PipelineContext, Poly } from '../types';
 import { CITY_GAP_AMOT, MIN_CITY_BUILDINGS, amahMeters, type Settings } from '../settings';
 import { featureFromLocal, fromLocal, toLocal } from '../geo/project';
@@ -62,9 +63,11 @@ export function findCities(
     const parts = members.map((i) => hullFeature(dilated[i]));
     const localPolygon = unionAll(parts, (n) => (dropped += n)) ?? parts[0];
     const hullPointsLocal = convexHull(members.flatMap((i) => hulls[i]));
+    const polygon = featureFromLocal(ctx.frame, localPolygon);
     const cluster: City = {
-      polygon: featureFromLocal(ctx.frame, localPolygon),
+      polygon,
       localPolygon,
+      builtUpPolygon: builtUpOutline(polygon, halfGapM),
       hullPointsLocal,
       buildingHullsLocal: members.map((i) => hulls[i]),
       buildingCount: members.length,
@@ -100,6 +103,32 @@ export function findCities(
   }
 
   return { cities, structures };
+}
+
+/**
+ * Built-up outline for display: erode the dilated cluster outline back by the
+ * half gap, so the drawn border hugs the outermost buildings instead of the
+ * ~35⅓-amot dilation ring. This is the same city-bounds definition findShvita
+ * tests analytically (inside the outline and ≥ half a gap from its edge). If
+ * erosion collapses the whole shape (a cluster narrower than the gap), the
+ * dilated outline is shown instead.
+ */
+export function builtUpOutline(polygon: Poly, halfGapM: number): Poly {
+  try {
+    const eroded = buffer(polygon, -halfGapM / 1000, { units: 'kilometers' });
+    if (eroded && hasArea(eroded.geometry)) return eroded as Poly;
+  } catch {
+    // Degenerate geometry — fall back to the dilated outline.
+  }
+  return polygon;
+}
+
+/** True if the geometry has at least one non-empty ring. */
+function hasArea(g: Polygon | MultiPolygon | null | undefined): boolean {
+  if (!g) return false;
+  return g.type === 'Polygon'
+    ? (g.coordinates[0]?.length ?? 0) >= 4
+    : g.coordinates.some((p) => (p[0]?.length ?? 0) >= 4);
 }
 
 /** Wrap an open convex loop as a Polygon feature. */

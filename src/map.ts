@@ -174,12 +174,12 @@ export class TechumMap {
     set(
       'cities',
       outputs.citiesResult && [
-        ...outputs.citiesResult.cities.map((c) => c.polygon),
-        ...outputs.citiesResult.structures.map((c) => c.polygon),
+        ...outputs.citiesResult.cities.map((c) => c.builtUpPolygon),
+        ...outputs.citiesResult.structures.map((c) => c.builtUpPolygon),
       ],
       { color: '#f39c12', weight: 1, dashArray: '4 3', fillOpacity: 0.05 },
     );
-    set('merged', outputs.merged?.map((c) => c.polygon), {
+    set('merged', outputs.merged?.map((c) => c.builtUpPolygon), {
       color: '#d35400',
       weight: 2,
       fillOpacity: 0.08,

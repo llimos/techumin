@@ -24,11 +24,19 @@ export interface DataEdges {
 export interface City {
   /**
    * City outline with ibur gaps filled (buildings dilated by half the 70⅔
-   * gap and unioned), geographic coordinates — for display and keshet checks.
+   * gap and unioned), geographic coordinates — used for keshet checks and as
+   * the merge/shvita geometry that expects the dilation.
    */
   polygon: Poly;
   /** Same outline in the local planar frame (meters). */
   localPolygon: Poly;
+  /**
+   * The built-up outline for display: `polygon` eroded back by the half gap,
+   * so the drawn border hugs the outermost buildings rather than the dilation.
+   * Matches findShvita's city-bounds test (inside and ≥ half a gap from the
+   * edge). Geographic coordinates.
+   */
+  builtUpPolygon: Poly;
   /**
    * Building hull vertices (local frame) — their convex hull is the city's
    * exact (undilated) extent, for squaring and width measurements. For a

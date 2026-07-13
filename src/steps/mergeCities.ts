@@ -29,7 +29,7 @@ import { mergeDataEdges } from '../geo/dataEdges';
 import { convexHull } from '../geo/minRect';
 import { unionAll } from '../geo/unionAll';
 import { unionFind } from '../geo/unionFind';
-import type { CitiesResult } from './findCities';
+import { builtUpOutline, type CitiesResult } from './findCities';
 
 export function mergeCities(
   ctx: PipelineContext,
@@ -74,7 +74,7 @@ function mergePlain(ctx: PipelineContext, settings: Settings, cities: City[]): C
       }
     }
   }
-  return buildMerged(ctx, cities, find);
+  return buildMerged(ctx, cities, find, comp / 2);
 }
 
 /**
@@ -268,7 +268,7 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
       }
     }
   }
-  return buildMerged(ctx, cities, find);
+  return buildMerged(ctx, cities, find, comp / 2);
 }
 
 /**
@@ -277,7 +277,12 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
  * Input cities are never mutated — singletons are shallow-copied — so the raw
  * cities shared with citiesResult stay label-free.
  */
-function buildMerged(ctx: PipelineContext, cities: City[], find: (i: number) => number): City[] {
+function buildMerged(
+  ctx: PipelineContext,
+  cities: City[],
+  find: (i: number) => number,
+  halfGapM: number,
+): City[] {
   const byRoot = new Map<number, number[]>();
   cities.forEach((_, i) => {
     const root = find(i);
@@ -294,9 +299,11 @@ function buildMerged(ctx: PipelineContext, cities: City[], find: (i: number) => 
     }
     const localPolys = idxs.map((i) => cities[i].localPolygon);
     const localPolygon = unionAll(localPolys) ?? localPolys[0];
+    const polygon = featureFromLocal(ctx.frame, localPolygon);
     merged.push({
-      polygon: featureFromLocal(ctx.frame, localPolygon),
+      polygon,
       localPolygon,
+      builtUpPolygon: builtUpOutline(polygon, halfGapM),
       hullPointsLocal: idxs.flatMap((i) => cities[i].hullPointsLocal),
       buildingHullsLocal: idxs.flatMap((i) => cities[i].buildingHullsLocal),
       buildingCount: idxs.reduce((s, i) => s + cities[i].buildingCount, 0),
