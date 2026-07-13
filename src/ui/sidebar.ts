@@ -105,12 +105,12 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
       { key: 'triangleWideMiddle' },
     ],
   },
-  { title: 'Squaring (ribua)', items: [{ key: 'chazonIshStraightSide' }] },
   {
-    title: 'Keshet/gam',
+    title: 'Squaring (ribua)',
     items: [
-      { key: 'keshetCondition', label: 'Condition' },
-      { key: 'keshetExclusion', label: 'Exclusion' },
+      { key: 'chazonIshStraightSide' },
+      { key: 'keshetCondition', note: 'שצח:ד (שו"ע מחמיר; רמ"א מיקל)' },
+      { key: 'keshetExclusion', note: 'שצח:ד (שו"ע מחמיר; רמ"א מיקל)' },
     ],
   },
   { title: 'Techum', items: [{ key: 'unequalLines', note: 'שצט:ח ברמ"א; מ"ב מיקל' }] },
