@@ -6,7 +6,6 @@ import type { LatLon } from '../types';
 
 export interface SidebarCallbacks {
   onSettingsChange(partial: Partial<Settings>): void;
-  /** Center the map on the point without setting the start point. */
   onLocate(point: LatLon, label?: string): void;
   /** The eruv button: arms placement, cancels it, or removes the eruv. */
   onEruvButton(): void;
@@ -81,7 +80,7 @@ export class Sidebar {
         </form>
         <div id="search-results"></div>
         <button id="geolocate" type="button">Use my location</button>
-        <p class="hint">Then click the map to set the start point.</p>
+        <p class="hint">…or click anywhere on the map.</p>
         <div id="status"></div>
       </section>
 

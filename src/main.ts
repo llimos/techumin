@@ -63,7 +63,7 @@ const sidebar = new Sidebar(document.querySelector('#sidebar')!, pipeline.getSet
   onLocate: (point) => {
     // On mobile the sidebar covers the map — reveal the located spot.
     setSidebarOpen(false);
-    map.map.setView([point.lat, point.lon]);
+    pick(point);
   },
   onEruvButton: () => void onEruvButton(),
   onGenerateReport: () => void generateReport(),
