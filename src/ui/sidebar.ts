@@ -93,7 +93,7 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
       { key: 'fourAmotMode', note: 'שצו:א ברמ"א; מ"ב מיקל' },
       {
         key: 'eruvCityTechum',
-        note: 'תח:א )שו"ע מחמיר, רמ"א מג"א ומ"ב מקילין(. יל"ע אם מותר לחזור לביתו',
+        note: 'תח:א (שו"ע מחמיר, רמ"א מג"א ומ"ב מקילין). יל"ע אם מותר לחזור לביתו',
       },
     ],
   },
@@ -101,7 +101,7 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
   {
     title: 'City merging',
     items: [
-      { key: 'triangleAbsorbsThird', note: 'שצח:ח )שו"ע מיקל; רמ"א מחמיר; מ"ב מכריע להקל(' },
+      { key: 'triangleAbsorbsThird', note: 'שצח:ח (שו"ע מיקל; רמ"א מחמיר; מ"ב מכריע להקל)' },
       { key: 'triangleWideMiddle' },
     ],
   },
@@ -120,7 +120,7 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
       { key: 'havlaahWidth', note: 'תח:א ברמ"א; מ"ב ס"ק כ נוטה להחמיר כמג"א' },
       {
         key: 'havlaahLength',
-        note: 'נודע ביהודה מחמיר )מהדו"ת או"ח סי\' נ(; חזו"א מיקל )או"ח סי; ק"י ס"ק י"ד(',
+        note: 'נודע ביהודה מחמיר (מהדו"ת או"ח סי\' נ); חזו"א מיקל (או"ח סי; ק"י ס"ק י"ד)',
       },
       { key: 'havlaahEruvStartCity', note: 'תח:א ברמ"א; מ"ב מיקל' },
     ],
