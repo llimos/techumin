@@ -6,8 +6,22 @@ import type { Position } from 'geojson';
 import type { DataEdges, LatLon, Poly } from './types';
 import type { PipelineOutputs } from './pipeline';
 import { anyDataEdge } from './geo/dataEdges';
+import { t, type LString } from './i18n';
 import { MeasureTool } from './ui/measure';
 import { DEBUG } from './debug';
+
+/** Overlay layers in control order: key, display label, on by default. */
+const LAYER_DEFS: [key: string, label: LString, on: boolean][] = [
+  ['buildings', { en: 'Buildings', he: 'בניינים' }, false],
+  ['cities', { en: 'Cities (raw clusters)', he: 'ערים (צברים גולמיים)' }, false],
+  ['merged', { en: 'Merged cities', he: 'ערים מאוחדות' }, true],
+  ['squarings', { en: 'Squaring (ribua)', he: 'ריבוע' }, true],
+  ['keshet', { en: 'Keshet/gam exclusion', he: 'הוצאת קשת/גאם' }, true],
+  ['shvita', { en: 'Shvisa bounds', he: 'גבולות השביתה' }, true],
+  ['techum', { en: 'Techum boundary', he: 'גבול התחום' }, true],
+];
+
+const CITY_NUMBERS_LABEL: LString = { en: 'City numbers (debug)', he: 'מספרי ערים (debug)' };
 
 /**
  * A scale bar in amot, reusing the stock Scale control's measuring and
@@ -26,7 +40,7 @@ const AmahScale = (L.Control.Scale as any).extend({
     if (!this._amahM || !maxMeters) return;
     const maxAmot = maxMeters / this._amahM;
     const amot = this._getRoundNum(maxAmot);
-    this._updateScale(this._aScale, `${amot} amot`, amot / maxAmot);
+    this._updateScale(this._aScale, `${amot} ${t({ en: 'amot', he: 'אמות' })}`, amot / maxAmot);
   },
 });
 
@@ -40,6 +54,7 @@ export class TechumMap {
   private eruvZone: L.LayerGroup;
   private amahScale: AmahScaleControl;
   private measure: MeasureTool;
+  private layersControl: L.Control.Layers;
 
   onPick: (point: LatLon) => void = () => {};
 
@@ -57,38 +72,40 @@ export class TechumMap {
     this.amahScale.addTo(this.map);
     this.measure = new MeasureTool(this.map);
 
-    const overlays: Record<string, L.LayerGroup> = {};
-    const defs: [key: string, label: string, on: boolean][] = [
-      ['buildings', 'Buildings', false],
-      ['cities', 'Cities (raw clusters)', false],
-      ['merged', 'Merged cities', true],
-      ['squarings', 'Squaring (ribua)', true],
-      ['keshet', 'Keshet/gam exclusion', true],
-      ['shvita', 'Shvisa bounds', true],
-      ['techum', 'Techum boundary', true],
-    ];
-    for (const [key, label, on] of defs) {
+    for (const [key, , on] of LAYER_DEFS) {
       const group = L.layerGroup();
       this.layers[key] = group;
-      overlays[label] = group;
       if (on) group.addTo(this.map);
     }
     // City numbers are always populated (the report snapshot shows them
     // temporarily) but shown and offered in the control only in debug mode.
     this.layers['cityNumbers'] = L.layerGroup();
-    if (DEBUG) {
-      overlays['City numbers (debug)'] = this.layers['cityNumbers'];
-      this.layers['cityNumbers'].addTo(this.map);
-    }
-    // On small screens the expanded layer list would cover most of the map.
-    const collapsed = window.matchMedia('(max-width: 768px)').matches;
-    L.control.layers({}, overlays, { collapsed }).addTo(this.map);
+    if (DEBUG) this.layers['cityNumbers'].addTo(this.map);
+    this.layersControl = this.buildLayersControl();
     this.eruvZone = L.layerGroup().addTo(this.map);
 
     this.map.on('click', (e: L.LeafletMouseEvent) => {
       if (this.measure.active) return;
       this.onPick({ lat: e.latlng.lat, lon: e.latlng.lng });
     });
+  }
+
+  /** The layers control, labelled in the current language. */
+  private buildLayersControl(): L.Control.Layers {
+    const overlays: Record<string, L.LayerGroup> = {};
+    for (const [key, label] of LAYER_DEFS) overlays[t(label)] = this.layers[key];
+    if (DEBUG) overlays[t(CITY_NUMBERS_LABEL)] = this.layers['cityNumbers'];
+    // On small screens the expanded layer list would cover most of the map.
+    const collapsed = window.matchMedia('(max-width: 768px)').matches;
+    return L.control.layers({}, overlays, { collapsed }).addTo(this.map);
+  }
+
+  /** Re-render language-dependent controls after a language switch. */
+  setLanguage(): void {
+    this.layersControl.remove();
+    this.layersControl = this.buildLayersControl();
+    this.amahScale._update?.();
+    this.measure.refreshLanguage();
   }
 
   /** Set the amah length (meters) used by the amot scale bar and measure tool. */

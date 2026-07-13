@@ -1,5 +1,6 @@
 import type { Feature, Polygon, MultiPolygon, Position } from 'geojson';
 import type { LocalFrame } from './geo/project';
+import type { LString } from './i18n';
 
 export type Poly = Feature<Polygon | MultiPolygon>;
 
@@ -80,18 +81,14 @@ export interface Shvita {
   dataEdges: DataEdges;
 }
 
-export interface StepWarnings {
-  push(message: string): void;
-}
-
 export interface PipelineContext {
   point: LatLon;
   frame: LocalFrame;
-  warnings: string[];
-  warn(message: string): void;
+  warnings: LString[];
+  warn(message: LString): void;
   /** Calculation log: the reasoning behind each step, shown in the report. */
-  logs: string[];
-  log(message: string): void;
+  logs: LString[];
+  log(message: LString): void;
   /** Debug-only log: goes to the debug console but not the report. */
   debug(message: string): void;
 }

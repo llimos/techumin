@@ -9,6 +9,8 @@ import {
 } from '@turf/turf';
 import type { Position } from 'geojson';
 import type { LatLon, PipelineContext, Poly, Shvita, Squaring } from '../types';
+import type { LString } from '../i18n';
+import { SIDE_NAMES } from '../geo/dataEdges';
 import {
   DESCENT_LIMIT_AMOT,
   FOUR_AMOT,
@@ -61,21 +63,31 @@ export async function measureTechum(
     ray(maxX, maxY, [1, 0]), // east from NE
   ]);
   if (missingElevation) {
-    ctx.warn('Elevation data unavailable for part of the measurement — those lines were measured flat.');
+    ctx.warn({
+      en: 'Elevation data unavailable for part of the measurement — those lines were measured flat.',
+      he: 'נתוני גובה חסרים לחלק מהמדידה — קווים אלה נמדדו כמישור.',
+    });
   }
-  const rays: [string, number, number][] = [
-    ['N', dNw, dNe],
-    ['S', dSw, dSe],
-    ['W', dWs, dWn],
-    ['E', dEs, dEn],
+  const rays: [LString, number, number][] = [
+    [{ en: 'N', he: 'צפ' }, dNw, dNe],
+    [{ en: 'S', he: 'דר' }, dSw, dSe],
+    [{ en: 'W', he: 'מע' }, dWs, dWn],
+    [{ en: 'E', he: 'מז' }, dEs, dEn],
   ];
-  const fmtRay = (m: number): string =>
-    `${(m / amah).toFixed(0)} amot/${m.toFixed(0)} m (−${(techumM - m).toFixed(1)} m)`;
-  ctx.log(
-    `Techum rays, of the ${TECHUM_AMOT}-amot (${techumM.toFixed(1)} m) budget ` +
+  const fmtRay = (m: number, lang: keyof LString): string => {
+    const [amot, meter] = lang === 'en' ? ['amot', 'm'] : ['אמות', "מ'"];
+    return `${(m / amah).toFixed(0)} ${amot}/${m.toFixed(0)} ${meter} (−${(techumM - m).toFixed(1)} ${meter})`;
+  };
+  ctx.log({
+    en:
+      `Techum rays, of the ${TECHUM_AMOT}-amot (${techumM.toFixed(1)} m) budget ` +
       '(gradient-rule shortfall in parens): ' +
-      rays.map(([dir, a, b]) => `${dir} ${fmtRay(a)} / ${fmtRay(b)}`).join(', '),
-  );
+      rays.map(([dir, a, b]) => `${dir.en} ${fmtRay(a, 'en')} / ${fmtRay(b, 'en')}`).join(', '),
+    he:
+      `קרני התחום, מתוך תקציב של ${TECHUM_AMOT} אמה (${techumM.toFixed(1)} מ') ` +
+      '(החֶסר מדין מדידת מדרון בסוגריים): ' +
+      rays.map(([dir, a, b]) => `${dir.he} ${fmtRay(a, 'he')} / ${fmtRay(b, 'he')}`).join(', '),
+  });
 
   const dW = Math.max(dWs, dWn);
   const dE = Math.max(dEs, dEn);
@@ -134,10 +146,14 @@ export async function measureTechum(
           const cut = difference(featureCollection([techumRot, outside as Poly]));
           if (cut) techumRot = cut as Poly;
         }
-        ctx.warn(
-          'Techum indented by the keshet/gam exclusion — the indentation uses the ' +
+        ctx.warn({
+          en:
+            'Techum indented by the keshet/gam exclusion — the indentation uses the ' +
             'measured side distances; terrain inside it is not measured separately.',
-        );
+          he:
+            'התחום נחתך פנימה בשל הוצאת הקשת/גאם — החיתוך משתמש במרחקי הצדדים ' +
+            'שנמדדו; פני הקרקע שבתוכו אינם נמדדים בנפרד.',
+        });
       }
     }
   }
@@ -157,11 +173,17 @@ export async function measureTechum(
   });
   if (swallowed.rects.length) {
     techumRot = unionAll([techumRot, ...swallowed.rects]) ?? techumRot;
-    ctx.warn(
-      `Havla'ah: ${swallowed.count} enclosed ${swallowed.count === 1 ? 'city counts' : 'cities count'} ` +
+    ctx.warn({
+      en:
+        `Havla'ah: ${swallowed.count} enclosed ${swallowed.count === 1 ? 'city counts' : 'cities count'} ` +
         'as 4 amot; the techum extends past it. The extension uses the city ribua and the ' +
         'measured side distances — it is not measured separately over the terrain.',
-    );
+      he:
+        `הבלעה: ${
+          swallowed.count === 1 ? 'עיר מובלעת אחת נחשבת' : `${swallowed.count} ערים מובלעות נחשבות`
+        } כ־4 אמות; התחום נמשך אל מעבר לה. ההמשך משתמש בריבוע העיר ובמרחקי הצדדים ` +
+        'שנמדדו — הוא אינו נמדד בנפרד על פני הקרקע.',
+    });
   }
 
   return featureFromLocal(ctx.frame, rotateFeature(techumRot, shvita.angle));
@@ -209,7 +231,7 @@ function havlaahBumps(
   // side's compass direction in the shvita-rotated frame — approximate when
   // the shvita is rotated.
   type Side = {
-    name: string;
+    name: LString;
     axis: 'x' | 'y';
     sign: 1 | -1;
     edge: number;
@@ -220,10 +242,10 @@ function havlaahBumps(
   const spanX: [number, number] = [minX - dW, maxX + dE];
   const spanY: [number, number] = [minY - dS, maxY + dN];
   const sides: Side[] = [
-    { name: 'north', axis: 'y', sign: 1, edge: maxY, reach: dN, shvitaSpan: [minX, maxX], techumSpan: spanX },
-    { name: 'south', axis: 'y', sign: -1, edge: minY, reach: dS, shvitaSpan: [minX, maxX], techumSpan: spanX },
-    { name: 'east', axis: 'x', sign: 1, edge: maxX, reach: dE, shvitaSpan: [minY, maxY], techumSpan: spanY },
-    { name: 'west', axis: 'x', sign: -1, edge: minX, reach: dW, shvitaSpan: [minY, maxY], techumSpan: spanY },
+    { name: SIDE_NAMES.n, axis: 'y', sign: 1, edge: maxY, reach: dN, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { name: SIDE_NAMES.s, axis: 'y', sign: -1, edge: minY, reach: dS, shvitaSpan: [minX, maxX], techumSpan: spanX },
+    { name: SIDE_NAMES.e, axis: 'x', sign: 1, edge: maxX, reach: dE, shvitaSpan: [minY, maxY], techumSpan: spanY },
+    { name: SIDE_NAMES.w, axis: 'x', sign: -1, edge: minX, reach: dW, shvitaSpan: [minY, maxY], techumSpan: spanY },
   ];
 
   const overlaps = (a: [number, number], b: [number, number]): boolean =>
@@ -317,19 +339,31 @@ function havlaahBumps(
       const lenAmot = Math.round(len / amah);
       if (fullyWithin) {
         const extAmot = Math.round(Math.max(0, len - four) / amah);
-        ctx.log(
-          `Havla'ah: city ${cityLabel} (${lenAmot} amot long) is enclosed within the ` +
-            `measured 2000 amot to the ${s.name} — it counts as 4 amot` +
+        ctx.log({
+          en:
+            `Havla'ah: city ${cityLabel} (${lenAmot} amot long) is enclosed within the ` +
+            `measured 2000 amot to the ${s.name.en} — it counts as 4 amot` +
             (extAmot > 0
               ? ` and the techum extends ${extAmot} amot past it.`
               : ' (no extension — it is no longer than 4 amot).'),
-        );
+          he:
+            `הבלעה: עיר ${cityLabel} (באורך ${lenAmot} אמות) מובלעת בתוך 2000 האמות ` +
+            `שנמדדו לצד ${s.name.he} — היא נחשבת כ־4 אמות` +
+            (extAmot > 0
+              ? ` והתחום נמשך ${extAmot} אמות אל מעבר לה.`
+              : ' (ללא המשך — אין היא ארוכה מ־4 אמות).'),
+        });
       } else {
-        ctx.log(
-          `Havla'ah (Rema): the eruv's start city ${cityLabel} (${lenAmot} amot long, ` +
-            `to the ${s.name}) is only partly within the techum — it is swallowed far ` +
+        ctx.log({
+          en:
+            `Havla'ah (Rema): the eruv's start city ${cityLabel} (${lenAmot} amot long, ` +
+            `to the ${s.name.en}) is only partly within the techum — it is swallowed far ` +
             'enough to include the whole city, with no outward extension.',
-        );
+          he:
+            `הבלעה (רמ"א): עיר המוצא של העירוב ${cityLabel} (באורך ${lenAmot} אמות, ` +
+            `לצד ${s.name.he}) נמצאת רק בחלקה בתוך התחום — היא מובלעת עד כדי ` +
+            'הכללת העיר כולה, ללא המשך כלפי חוץ.',
+        });
       }
     }
   }

@@ -34,7 +34,8 @@ body,
   border: 1px solid #ccc;
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  padding: 8px 16px 8px 38px;
+  padding: 8px 16px;
+  padding-inline-start: 38px;
   font-weight: 600;
   font-size: 14px;
   color: #2c3e50;
@@ -44,7 +45,7 @@ body,
 #calc-overlay::before {
   content: '';
   position: absolute;
-  left: 14px;
+  inset-inline-start: 14px;
   top: 50%;
   width: 14px;
   height: 14px;
@@ -101,6 +102,35 @@ body,
   line-height: 1.45;
 }
 
+/* Language switch, in the top corner opposite the title. */
+#lang-toggle {
+  float: inline-end;
+  display: flex;
+  margin-top: 2px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#lang-toggle button {
+  border: none;
+  background: #fff;
+  color: #555;
+  font-size: 12.5px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+#lang-toggle button + button {
+  border-inline-start: 1px solid #bbb;
+}
+
+#lang-toggle button.active {
+  background: #2c3e50;
+  color: #fff;
+  cursor: default;
+}
+
 #sidebar h1 {
   margin: 0;
   font-size: 22px;
@@ -155,7 +185,7 @@ body,
 }
 
 #sidebar input[type='checkbox'] {
-  margin-right: 6px;
+  margin-inline-end: 6px;
 }
 
 #search-form {
@@ -188,7 +218,7 @@ body,
 .search-result {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   margin-top: 6px;
   padding: 5px 8px;
   background: #fff;
@@ -204,14 +234,14 @@ body,
 
 .warnings {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: #a94442;
 }
 
 .warnings:empty::after {
-  content: 'None.';
+  content: attr(data-empty);
   color: #777;
-  margin-left: -18px;
+  margin-inline-start: -18px;
 }
 
 .measure-toggle svg {
@@ -244,7 +274,8 @@ body,
 }
 
 .eruv-notice {
-  margin: 2px 0 8px 22px;
+  margin: 2px 0 8px;
+  margin-inline-start: 22px;
 }
 
 /* Small Hebrew source citation under an opinion control. */
@@ -286,7 +317,7 @@ body,
 
 .disclaimers ul {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   color: #666;
   font-size: 12.5px;
 }
@@ -306,7 +337,7 @@ body,
 
 .about .gh-icon {
   vertical-align: -2px;
-  margin-right: 5px;
+  margin-inline-end: 5px;
 }
 
 .about .credit {

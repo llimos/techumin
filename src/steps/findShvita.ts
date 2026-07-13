@@ -29,10 +29,14 @@ export function findShvita(
   // the 70⅔ strip only when the Rema karpef option is on.
   for (const sq of squarings) {
     if (inCityBounds(localPt, sq.city.localPolygon, halfGapM, settings.remaExtra)) {
-      ctx.log(
-        `Shvisa: point is inside city ${sq.city.label ?? '?'} ` +
+      ctx.log({
+        en:
+          `Shvisa: point is inside city ${sq.city.label ?? '?'} ` +
           `(${sq.city.buildingCount} buildings) - using its squaring`,
-      );
+        he:
+          `שביתה: הנקודה בתוך עיר ${sq.city.label ?? '?'} ` +
+          `(${sq.city.buildingCount} בניינים) — נמדד מריבועה`,
+      });
       return { polygon: sq.polygon, angle: sq.angle, source: 'city', dataEdges: sq.dataEdges };
     }
   }
@@ -41,10 +45,14 @@ export function findShvita(
   // squared-off corner does not acquire city status (Mishna Eruvin 5:7: an
   // eruv outside the ibur, even one amah, measures from where it lies).
   if (squarings.some((sq) => booleanPointInPolygon(pt, sq.polygon))) {
-    ctx.warn(
-      "Point is within a city's squared bounds (ribua) but outside the city " +
+    ctx.warn({
+      en:
+        "Point is within a city's squared bounds (ribua) but outside the city " +
         'itself — the ribua does not confer city status; measuring from the point.',
-    );
+      he:
+        'הנקודה בתוך הריבוע של עיר אך מחוץ לעיר עצמה — הריבוע אינו מקנה דין עיר; ' +
+        'מודדים מן הנקודה.',
+    });
   }
 
   // Inside a building? Its North-South bounding rectangle is the shvita.
@@ -67,16 +75,22 @@ export function findShvita(
         ],
       ]) as Poly,
     );
-    ctx.warn('Point is outside any city; measuring from the enclosing building.');
+    ctx.warn({
+      en: 'Point is outside any city; measuring from the enclosing building.',
+      he: 'הנקודה מחוץ לכל עיר; מודדים מן הבניין שהיא בתוכו.',
+    });
     return { polygon, angle: 0, source: 'building', dataEdges: noDataEdges() };
   }
 
   // Open country: a 4-amot square around the point.
-  ctx.warn(
-    `Point is in open country; measuring from ${
+  ctx.warn({
+    en: `Point is in open country; measuring from ${
       settings.fourAmotMode === 'each' ? '4 amot in each direction' : '4 amot total'
     } around the point.`,
-  );
+    he: `הנקודה בשדה פתוח; מודדים מ${
+      settings.fourAmotMode === 'each' ? '־4 אמות לכל רוח' : '־4 אמות בסך הכל'
+    } סביב הנקודה.`,
+  });
   return pointShvita(ctx, settings, localPt);
 }
 

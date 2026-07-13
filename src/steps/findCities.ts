@@ -79,7 +79,10 @@ export function findCities(
   }
   debugLog(`findCities: outlines took ${Math.round(performance.now() - tUnion)} ms`);
   if (dropped > 0) {
-    ctx.warn(`${dropped} building outline(s) could not be merged and were skipped.`);
+    ctx.warn({
+      en: `${dropped} building outline(s) could not be merged and were skipped.`,
+      he: `לא ניתן היה לאחד ${dropped} קווי מתאר של בניינים והם דולגו.`,
+    });
   }
 
   // Anchor each city number to coordinates, so numbers from different runs
@@ -87,7 +90,10 @@ export function findCities(
   cities.forEach((c, i) => {
     const bb = bboxOf(allPositions(c.localPolygon.geometry));
     const [lon, lat] = fromLocal(ctx.frame, [(bb.minX + bb.maxX) / 2, (bb.minY + bb.maxY) / 2]);
-    ctx.log(`City ${i + 1}: ${lat.toFixed(5)}, ${lon.toFixed(5)} — ${c.buildingCount} buildings`);
+    ctx.log({
+      en: `City ${i + 1}: ${lat.toFixed(5)}, ${lon.toFixed(5)} — ${c.buildingCount} buildings`,
+      he: `עיר ${i + 1}: ‏${lat.toFixed(5)}, ${lon.toFixed(5)} — ${c.buildingCount} בניינים`,
+    });
   });
 
   const origin: Position = [0, 0]; // the query point is the local-frame origin
@@ -97,9 +103,15 @@ export function findCities(
       pointInRings(origin, s.localPolygon.geometry.coordinates),
   );
   if (cities.length === 0) {
-    ctx.warn('No cluster of 6+ buildings found — no halachic city in the loaded area.');
+    ctx.warn({
+      en: 'No cluster of 6+ buildings found — no halachic city in the loaded area.',
+      he: 'לא נמצא צבר של 6 בניינים או יותר — אין עיר הלכתית באזור שנטען.',
+    });
   } else if (inSmallCluster) {
-    ctx.warn('The point is in a cluster of fewer than 6 buildings, which is not a city.');
+    ctx.warn({
+      en: 'The point is in a cluster of fewer than 6 buildings, which is not a city.',
+      he: 'הנקודה נמצאת בצבר של פחות מ־6 בניינים, שאינו נחשב עיר.',
+    });
   }
 
   return { cities, structures };
