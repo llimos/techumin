@@ -7,6 +7,7 @@ export type FourAmotMode = 'each' | 'total';
 export type UnequalLines = 'extend' | 'diagonal';
 export type TriangleWideMiddle = 'merge' | 'noMerge';
 export type HavlaahWidth = 'chazonIsh' | 'magenAvraham' | 'rema';
+export type HavlaahLength = 'parallel' | 'fullWidth';
 
 export interface Settings {
   amahPreset: AmahPreset;
@@ -29,10 +30,14 @@ export interface Settings {
   fourAmotMode: FourAmotMode;
   /** Unequal measurement lines: extend the shorter, or join on the diagonal. */
   unequalLines: UnequalLines;
-  /** Havla'ah: sideways width of the extension past a swallowed city —
+  /** Havla'ah: widthwise push of the techum level with a swallowed city —
    *  Rema: city plus 2000 amot each side; Magen Avraham: the city width only;
    *  Chazon Ish: city plus 2000 each side, capped at the techum width. */
   havlaahWidth: HavlaahWidth;
+  /** Havla'ah: width of the lengthwise extension past a swallowed city —
+   *  only parallel to the city (clamped to the original techum width), or
+   *  the entire original techum width. */
+  havlaahLength: HavlaahLength;
   /** Rema: the eruv's start city is swallowed even when only partly within
    *  the eruv techum — but only far enough to include the whole city. */
   havlaahEruvStartCity: boolean;
@@ -135,12 +140,21 @@ export const SETTING_META: SettingMeta[] = [
   },
   {
     key: 'havlaahWidth',
-    label: "Havla'ah: width of the techum past a swallowed city",
+    label: "Havla'ah: widthwise push level with a swallowed city",
     kind: 'select',
     values: {
       magenAvraham: 'City width only (Magen Avraham)',
       chazonIsh: 'City + 2000, capped at techum width (Chazon Ish)',
       rema: 'City + 2000 amot each side (Rema)',
+    },
+  },
+  {
+    key: 'havlaahLength',
+    label: "Havla'ah: lengthwise extension past a swallowed city",
+    kind: 'select',
+    values: {
+      parallel: 'Only parallel to the city',
+      fullWidth: 'Entire width of the techum',
     },
   },
   {
@@ -208,6 +222,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fourAmotMode: 'each',
   unequalLines: 'extend',
   havlaahWidth: 'magenAvraham',
+  havlaahLength: 'parallel',
   havlaahEruvStartCity: true,
   eruvCityTechum: false,
   fetchRadiusM: 3000,
@@ -228,6 +243,7 @@ const SETTING_VALID: Record<keyof Settings, (v: unknown) => boolean> = {
   fourAmotMode: (v) => v === 'each' || v === 'total',
   unequalLines: (v) => v === 'extend' || v === 'diagonal',
   havlaahWidth: (v) => v === 'chazonIsh' || v === 'magenAvraham' || v === 'rema',
+  havlaahLength: (v) => v === 'parallel' || v === 'fullWidth',
   havlaahEruvStartCity: (v) => typeof v === 'boolean',
   eruvCityTechum: (v) => typeof v === 'boolean',
   fetchRadiusM: (v) => typeof v === 'number' && v >= 1000 && v <= 6000,
@@ -277,6 +293,7 @@ export const SETTING_FIRST_STEP: Record<keyof Settings, number> = {
   fourAmotMode: 5,
   unequalLines: 6,
   havlaahWidth: 6,
+  havlaahLength: 6,
   havlaahEruvStartCity: 8,
   eruvCityTechum: 7,
 };
