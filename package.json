@@ -22,5 +22,10 @@
     "leaflet": "^1.9.4",
     "osmtogeojson": "^3.0.0-beta.5",
     "polygon-clipping": "^0.15.7"
+  },
+  "overrides": {
+    "osmtogeojson": {
+      "@xmldom/xmldom": "^0.8.4"
+    }
   }
 }
