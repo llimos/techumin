@@ -28,6 +28,7 @@ Drive the real app headless; don't import pipeline modules directly.
 - Metres→degrees at that latitude: ÷110882 for lat, ÷94787 for lon.
 - `.claude/skills/verify/verify-triangle.mjs` is a working example (triangle-rule scenarios); copy it to the repo root and run `node verify-triangle.mjs <in|out|edge|behindA>`.
 - `.claude/skills/verify/verify-havlaah.mjs` runs from its own directory (`PORT=.. node .claude/skills/verify/verify-havlaah.mjs <maParallel|remaParallel|remaFull>`) and self-asserts havla'ah widths by intersecting horizontal lines with the techum ring.
+- `PORT=.. node .claude/skills/verify/verify-squaring.mjs <square|straight>` self-asserts the perceptual squaring tolerance: a jagged 20°-rotated near-square city (tolerant already-square branch) and a wobbly straight-side city with `chazonIshStraightSide` enabled (injected via localStorage `techumin-settings`) must both square at ~20°.
 
 ## Gotchas
 

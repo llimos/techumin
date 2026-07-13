@@ -21,7 +21,7 @@ import {
 } from '../settings';
 import { anyDataEdge } from '../geo/dataEdges';
 import { pointInRings } from '../geo/dilate';
-import { boundingRect, minAreaRect } from '../geo/minRect';
+import { boundingRect, convexHull, minAreaRect, type Rect } from '../geo/minRect';
 import { allPositions, rotateFeature, rotatePoint } from '../geo/rotate';
 import { featureFromLocal } from '../geo/project';
 
@@ -29,8 +29,12 @@ import { featureFromLocal } from '../geo/project';
 const OBLONG_RATIO = 0.95;
 /** A straight side must span ≥ this fraction of the city extent (Chazon Ish). */
 const STRAIGHT_SIDE_SPAN = 0.95;
-const COLLINEAR_TOL_RAD = (2 * Math.PI) / 180;
-const COLLINEAR_OFFSET_M = 3;
+/** Deviation the eye ignores when judging straightness: ~2% of the span, ≥ 4 m. */
+const PERCEPTUAL_TOL_FRAC = 0.02;
+const PERCEPTUAL_TOL_MIN_M = 4;
+
+const perceptualTol = (spanM: number): number =>
+  Math.max(PERCEPTUAL_TOL_MIN_M, spanM * PERCEPTUAL_TOL_FRAC);
 
 export function squareCities(
   ctx: PipelineContext,
@@ -57,12 +61,28 @@ function squareOne(ctx: PipelineContext, settings: Settings, city: City): Squari
   const minRect = minAreaRect(pts);
   const cityArea = planarArea(local);
   let angle: number;
-  if (cityArea / minRect.area >= OBLONG_RATIO) {
+  const squareTol = cityArea / minRect.area >= OBLONG_RATIO ? 0 : alreadySquareTol(local, minRect);
+  if (squareTol !== null) {
     angle = normalizeAngle(minRect.angle);
+    if (squareTol > 0) {
+      ctx.log(
+        `City ${city.label ?? '?'} treated as already squared — its outline stays within ` +
+          `~${Math.round(squareTol)} m of its bounding rectangle.`,
+      );
+    }
   } else {
     // 2. Chazon Ish: one straight side along the city's full length fixes the angle.
     const straight = settings.chazonIshStraightSide ? findStraightSideAngle(local, pts) : null;
-    angle = straight !== null ? normalizeAngle(straight) : 0;
+    if (straight) {
+      angle = normalizeAngle(straight.theta);
+      ctx.log(
+        `Straight side found for city ${city.label ?? '?'} (spans ` +
+          `${Math.round(straight.spanFrac * 100)}% of the city, deviations ≤ ` +
+          `${Math.round(straight.tol)} m) — squaring aligned to it.`,
+      );
+    } else {
+      angle = 0;
+    }
   }
 
   // Work in the frame where the squaring rectangle is axis-aligned. The rect
@@ -173,10 +193,34 @@ function planarArea(poly: Poly): number {
 }
 
 /**
- * Chazon Ish straight side: find a maximal collinear run of boundary edges
- * spanning (nearly) the whole city in its direction; returns its angle or null.
+ * Tolerant already-square test: the city must cover its min-area rectangle
+ * eroded by the perceptual tolerance on each side — i.e. no dent deeper than
+ * the eye notices when judging the outline square. Shallow roughness along a
+ * whole edge passes; one deep notch does not (an area ratio can't tell those
+ * apart). Returns the tolerance used, or null when the city doesn't qualify.
  */
-function findStraightSideAngle(local: Poly, allPts: Position[]): number | null {
+export function alreadySquareTol(local: Poly, rect: Rect): number | null {
+  const tol = perceptualTol(Math.min(rect.width, rect.height));
+  if (rect.width <= 2 * tol || rect.height <= 2 * tol) return null;
+  const [minX, minY] = rotatePoint(rect.corners[0], -rect.angle);
+  const [maxX, maxY] = rotatePoint(rect.corners[2], -rect.angle);
+  const eroded = rectPoly(minX + tol, minY + tol, maxX - tol, maxY - tol);
+  const cityRot = rotateFeature(local, -rect.angle);
+  const dents = difference(featureCollection([eroded, cityRot]));
+  return !dents || planarArea(dents as Poly) < 1 ? tol : null;
+}
+
+/**
+ * Chazon Ish straight side: a contiguous stretch of boundary that stays within
+ * the perceptual tolerance of a straight line and spans (nearly) the whole
+ * city in that line's direction. Candidate lines are the supporting lines of
+ * the convex hull's edges — a straight-looking side necessarily hugs one.
+ * Returns the least-squares angle of the qualifying stretch, or null.
+ */
+export function findStraightSideAngle(
+  local: Poly,
+  allPts: Position[],
+): { theta: number; spanFrac: number; tol: number } | null {
   const rings =
     local.geometry.type === 'Polygon'
       ? [local.geometry.coordinates[0]]
@@ -185,41 +229,84 @@ function findStraightSideAngle(local: Poly, allPts: Position[]): number | null {
   const ring = rings.reduce((best, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(best)) ? r : best));
 
   const n = ring.length - 1;
-  for (let start = 0; start < n; start++) {
-    const a = ring[start];
-    let end = start + 1;
-    let b = ring[end % n];
+  if (n < 2) return null;
+  const hull = convexHull(ring.slice(0, n));
+  if (hull.length < 2) return null;
+
+  for (let h = 0; h < hull.length; h++) {
+    const a = hull[h];
+    const b = hull[(h + 1) % hull.length];
     const theta = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    // Extend the run while points stay collinear with the initial direction.
-    while (end - start < n) {
-      const next = ring[(end + 1) % n];
-      if (pointLineOffset(next, a, theta) > COLLINEAR_OFFSET_M) break;
-      const dir = Math.atan2(next[1] - b[1], next[0] - b[0]);
-      if (Math.abs(angleDiff(dir, theta)) > COLLINEAR_TOL_RAD) break;
-      end++;
-      b = ring[end % n];
-    }
-    const runLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (runLen === 0) continue;
-    // Does the run span the city's full extent along its own direction?
+    // City extent along the candidate direction.
     const u: Position = [Math.cos(theta), Math.sin(theta)];
-    let min = Infinity;
-    let max = -Infinity;
+    let lo = Infinity;
+    let hi = -Infinity;
     for (const p of allPts) {
       const t = p[0] * u[0] + p[1] * u[1];
-      if (t < min) min = t;
-      if (t > max) max = t;
+      if (t < lo) lo = t;
+      if (t > hi) hi = t;
     }
-    if (runLen >= STRAIGHT_SIDE_SPAN * (max - min)) return theta;
+    const extent = hi - lo;
+    if (extent <= 0) continue;
+    const tol = perceptualTol(extent);
+
+    // Vertices within tol of the supporting line; edges between two in-band
+    // vertices stay inside the band, so testing vertices suffices.
+    const inBand: boolean[] = [];
+    for (let i = 0; i < n; i++) inBand.push(pointLineOffset(ring[i], a, theta) <= tol);
+    const anchor = inBand.indexOf(false);
+    if (anchor === -1) {
+      // The whole boundary is one straight-looking sliver along the line.
+      return { theta: fitAngle(ring.slice(0, n)), spanFrac: 1, tol };
+    }
+
+    // Walk the ring from the out-of-band anchor so every run closes.
+    let run: Position[] = [];
+    for (let k = 1; k <= n; k++) {
+      const i = (anchor + k) % n;
+      if (inBand[i]) {
+        run.push(ring[i]);
+        continue;
+      }
+      if (run.length >= 2) {
+        let rLo = Infinity;
+        let rHi = -Infinity;
+        for (const p of run) {
+          const t = p[0] * u[0] + p[1] * u[1];
+          if (t < rLo) rLo = t;
+          if (t > rHi) rHi = t;
+        }
+        if (rHi - rLo >= STRAIGHT_SIDE_SPAN * extent) {
+          return { theta: fitAngle(run), spanFrac: (rHi - rLo) / extent, tol };
+        }
+      }
+      run = [];
+    }
   }
   return null;
 }
 
-function angleDiff(a: number, b: number): number {
-  let d = a - b;
-  while (d > Math.PI) d -= 2 * Math.PI;
-  while (d < -Math.PI) d += 2 * Math.PI;
-  return d;
+/** Orientation of the least-squares (principal-axis) line through the points. */
+function fitAngle(pts: Position[]): number {
+  let mx = 0;
+  let my = 0;
+  for (const p of pts) {
+    mx += p[0];
+    my += p[1];
+  }
+  mx /= pts.length;
+  my /= pts.length;
+  let sxx = 0;
+  let sxy = 0;
+  let syy = 0;
+  for (const p of pts) {
+    const dx = p[0] - mx;
+    const dy = p[1] - my;
+    sxx += dx * dx;
+    sxy += dx * dy;
+    syy += dy * dy;
+  }
+  return 0.5 * Math.atan2(2 * sxy, sxx - syy);
 }
 
 function pointLineOffset(p: Position, origin: Position, theta: number): number {
