@@ -291,6 +291,30 @@ body,
   font-size: 12.5px;
 }
 
+.about p {
+  margin: 6px 0;
+}
+
+.about a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+.about a:hover {
+  text-decoration: underline;
+}
+
+.about .gh-icon {
+  vertical-align: -2px;
+  margin-right: 5px;
+}
+
+.about .credit {
+  margin-top: 12px;
+  color: #777;
+  font-size: 12.5px;
+}
+
 /* While snapshotting the map for the report: hide the interactive controls
    but keep the OSM attribution (required) and the metre/amot scale bars. */
 .map-capturing .leaflet-control:not(.leaflet-control-attribution):not(.leaflet-control-scale) {
