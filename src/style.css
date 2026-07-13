@@ -121,6 +121,16 @@ body,
   padding-bottom: 4px;
 }
 
+/* Subsection headers within the halachic-opinion controls. */
+#sidebar h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  color: #777;
+  margin: 16px 0 4px;
+}
+
 #sidebar label {
   display: block;
   margin: 8px 0;
