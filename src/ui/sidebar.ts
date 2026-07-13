@@ -97,7 +97,7 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
       },
     ],
   },
-  { title: 'City definition', items: [{ key: 'remaExtra' }] },
+  { title: 'City definition', items: [{ key: 'remaExtra', note: 'שצח:ה' }] },
   {
     title: 'City merging',
     items: [
@@ -108,7 +108,7 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
   {
     title: 'Squaring (ribua)',
     items: [
-      { key: 'chazonIshStraightSide' },
+      { key: 'chazonIshStraightSide', note: 'או"ח קי:כג' },
       { key: 'keshetCondition', note: 'שצח:ד (שו"ע מחמיר; רמ"א מיקל)' },
       { key: 'keshetExclusion', note: 'שצח:ד (שו"ע מחמיר; רמ"א מיקל)' },
     ],
