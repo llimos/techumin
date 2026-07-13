@@ -79,21 +79,33 @@ interface OpinionItem {
   key: keyof Settings;
   /** Shorter label used under a section header (see settingControl). */
   label?: string;
+  /** Small Hebrew source note shown in gray under the control. */
+  note?: string;
 }
 
 /** The opinion controls grouped into labelled subsections; a null title leaves
  *  the controls ungrouped at the top. Keys reference SETTING_META. */
 const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
-  { title: null, items: [{ key: 'amahPreset' }, { key: 'fourAmotMode' }, { key: 'eruvCityTechum' }] },
+  {
+    title: null,
+    items: [
+      { key: 'amahPreset' },
+      { key: 'fourAmotMode', note: 'שצו:א ברמ"א; מ"ב מיקל' },
+      {
+        key: 'eruvCityTechum',
+        note: 'תח:א )שו"ע מחמיר, רמ"א מג"א ומ"ב מקילין(. יל"ע אם מותר לחזור לביתו',
+      },
+    ],
+  },
   { title: 'City definition', items: [{ key: 'remaExtra' }] },
   {
     title: 'City merging',
-    items: [{ key: 'triangleAbsorbsThird' }, { key: 'triangleWideMiddle' }],
+    items: [
+      { key: 'triangleAbsorbsThird', note: 'שצח:ח )שו"ע מיקל; רמ"א מחמיר; מ"ב מכריע להקל(' },
+      { key: 'triangleWideMiddle' },
+    ],
   },
-  {
-    title: 'Squaring (ribua)',
-    items: [{ key: 'chazonIshStraightSide' }, { key: 'unequalLines' }],
-  },
+  { title: 'Squaring (ribua)', items: [{ key: 'chazonIshStraightSide' }] },
   {
     title: 'Keshet/gam',
     items: [
@@ -101,9 +113,17 @@ const OPINION_GROUPS: { title: string | null; items: OpinionItem[] }[] = [
       { key: 'keshetExclusion', label: 'Exclusion' },
     ],
   },
+  { title: 'Techum', items: [{ key: 'unequalLines', note: 'שצט:ח ברמ"א; מ"ב מיקל' }] },
   {
     title: "Havla'ah",
-    items: [{ key: 'havlaahWidth' }, { key: 'havlaahLength' }, { key: 'havlaahEruvStartCity' }],
+    items: [
+      { key: 'havlaahWidth', note: 'תח:א ברמ"א; מ"ב ס"ק כ נוטה להחמיר כמג"א' },
+      {
+        key: 'havlaahLength',
+        note: 'נודע ביהודה מחמיר )מהדו"ת או"ח סי\' נ(; חזו"א מיקל )או"ח סי; ק"י ס"ק י"ד(',
+      },
+      { key: 'havlaahEruvStartCity', note: 'תח:א ברמ"א; מ"ב מיקל' },
+    ],
   },
 ];
 
@@ -114,8 +134,9 @@ function opinionControls(): string {
   return OPINION_GROUPS.map((group) => {
     const header = group.title ? `<h3>${esc(group.title)}</h3>` : '';
     const controls = group.items
-      .map(({ key, label }) => {
+      .map(({ key, label, note }) => {
         let html = settingControl(metaByKey.get(key)!, label);
+        if (note) html += `<p class="opinion-note" dir="rtl">${esc(note)}</p>`;
         if (key === 'amahPreset') html += settingControl(metaByKey.get('customAmahCm')!);
         if (key === 'eruvCityTechum') html += ERUV_CITY_NOTICE;
         return html;

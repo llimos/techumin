@@ -247,6 +247,13 @@ body,
   margin: 2px 0 8px 22px;
 }
 
+/* Small Hebrew source citation under an opinion control. */
+#sidebar .opinion-note {
+  margin: -3px 0 8px;
+  color: #999;
+  font-size: 12px;
+}
+
 .eruv-marker {
   font-size: 24px;
   line-height: 28px;
