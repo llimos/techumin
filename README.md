@@ -139,7 +139,9 @@ measurement direction overlaps the shvita's span — not only an added squared
 corner, and its whole length fits within the measured distance on that side.
 Its width may exceed the techum's.
 
-The sideways width of the added area is *configurable:*
+When the swallowed city (or the city plus 2000 amot, per the selected
+opinion) is wider than the techum, it pushes the techum out **sideways** —
+but only level with the city itself, not past it. How far is *configurable:*
 
 - **Magen Avraham:** the city's own width only.
 - **Chazon Ish:** the city's width plus 2000 amot each side, capped at the
@@ -147,9 +149,11 @@ The sideways width of the added area is *configurable:*
   below — which always keeps its full width).
 - **Rema:** the city's width plus 2000 amot each side, uncapped.
 
-At that width, the techum widens level with the swallowed city (the sideways
-extension applies only parallel to the city, not beyond it) and extends
-outward past the measured edge by the freed (length − 4 amot).
+Separately, the techum extends **outward** past the measured edge by the
+freed (length − 4 amot). The width of that lengthwise extension is
+*configurable:* only parallel to the city (clamped to the original techum
+width — the default), or across the entire original techum width. The
+sideways push above never carries into this extension.
 
 When measuring from an eruv techumin, *configurable* (Rema): the city holding
 the original start point is swallowed even when its length is only partly
@@ -181,7 +185,8 @@ cached, so removing the eruv restores it instantly.
 | Rema extra 70⅔ amot | off / on | Step 4 |
 | No-structure fallback | 4 amot each direction / 4 amot total | Step 5 |
 | Unequal measurement lines | extend shorter / join on diagonal | Step 6 |
-| Havla'ah sideways width | city width (Magen Avraham) / city + 2000 capped at techum width (Chazon Ish) / city + 2000 uncapped (Rema) | Step 6 |
+| Havla'ah sideways push level with the city | city width (Magen Avraham) / city + 2000 capped at techum width (Chazon Ish) / city + 2000 uncapped (Rema) | Step 6 |
+| Havla'ah lengthwise extension width | parallel to the city / entire techum width | Step 6 |
 | Havla'ah of the eruv's start city when partly beyond the techum | on (Rema) / off | Eruv re-measure |
 | Eruv techumin placement | within 2000 amot of the start point / anywhere in the city's techum | Eruv re-measure |
 | Data radius (non-halachic) | 3 km default | Step 1 |

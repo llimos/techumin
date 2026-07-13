@@ -15,7 +15,7 @@ Drive the real app headless; don't import pipeline modules directly.
 
 ## Drive
 
-- Navigate `http://localhost:PORT/?lat=..&lon=..&debug=1`, wait for `#status`, give the map ~3 s to settle, then `page.mouse.click` at the viewport centre — the URL params centre the map but only a click picks the point and runs the pipeline.
+- Navigate `http://localhost:PORT/?lat=..&lon=..&debug=1`, wait for `#status`, give the map ~3 s to settle, then `page.mouse.click` at the centre of the `#map` container's bounding box — the URL params centre the map but only a click picks the point and runs the pipeline. The sidebar offsets the map, so the URL point is at the **container** centre, not the viewport centre (clicking the viewport centre lands ~850 m west).
 - Wait for `#status` text to become exactly `Done.` (allow 300 s — live map tiles + AWS terrain).
 - With `?debug=1`, merge/pipeline decisions log to console as `[techum debug] ...` and `window.__techumOutputs` exposes every step's output (`fetched`, `citiesResult`, `merged`, `squarings`, `shvita`, `techum`, ...). Assert on those, not on Leaflet layers.
 
@@ -27,6 +27,7 @@ Drive the real app headless; don't import pipeline modules directly.
 - Flat terrain for tight distance assertions: 31.72, 34.68 (Israel coastal plain) — rays come out ~959 m of the 960 m budget.
 - Metres→degrees at that latitude: ÷110882 for lat, ÷94787 for lon.
 - `.claude/skills/verify/verify-triangle.mjs` is a working example (triangle-rule scenarios); copy it to the repo root and run `node verify-triangle.mjs <in|out|edge|behindA>`.
+- `.claude/skills/verify/verify-havlaah.mjs` runs from its own directory (`PORT=.. node .claude/skills/verify/verify-havlaah.mjs <maParallel|remaParallel|remaFull>`) and self-asserts havla'ah widths by intersecting horizontal lines with the techum ring.
 
 ## Gotchas
 

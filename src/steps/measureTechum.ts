@@ -276,8 +276,10 @@ function havlaahBumps(
         continue;
       }
 
-      // Sideways band on the cross axis, per opinion. The Chazon Ish cap is
-      // lifted for the eruv start city (its full width is always included).
+      // Widthwise push on the cross axis, per opinion — applies only level
+      // with the city, not to the lengthwise extension past it. The Chazon
+      // Ish cap is lifted for the eruv start city (its full width is always
+      // included).
       let band: [number, number];
       if (settings.havlaahWidth === 'rema') {
         band = [cross[0] - a2000, cross[1] + a2000];
@@ -291,15 +293,24 @@ function havlaahBumps(
       }
       if (band[1] <= band[0]) continue;
 
-      // Two rectangles across the band: one level with the city (the sideways
-      // extension applies only parallel to the city), one outward past the
-      // measured techum edge by the freed budget.
-      const sideRect = (lo: number, hi: number): Poly =>
+      const sideRect = (b: [number, number], lo: number, hi: number): Poly =>
         s.axis === 'y'
-          ? rectPoly(band[0], Math.min(lo, hi), band[1], Math.max(lo, hi))
-          : rectPoly(Math.min(lo, hi), band[0], Math.max(lo, hi), band[1]);
-      rects.push(sideRect(near, far));
-      if (bumpOut !== undefined) rects.push(sideRect(reachOut, bumpOut));
+          ? rectPoly(b[0], Math.min(lo, hi), b[1], Math.max(lo, hi))
+          : rectPoly(Math.min(lo, hi), b[0], Math.max(lo, hi), b[1]);
+
+      // One rectangle level with the city across the band, one outward past
+      // the measured techum edge by the freed budget — the latter spanning
+      // either the whole original techum width, or only the city's own width
+      // (clamped to the techum width; the widthwise push does not carry past
+      // the city).
+      rects.push(sideRect(band, near, far));
+      if (bumpOut !== undefined) {
+        const bumpBand: [number, number] =
+          settings.havlaahLength === 'fullWidth'
+            ? s.techumSpan
+            : [Math.max(cross[0], s.techumSpan[0]), Math.min(cross[1], s.techumSpan[1])];
+        if (bumpBand[1] > bumpBand[0]) rects.push(sideRect(bumpBand, reachOut, bumpOut));
+      }
       count++;
 
       const cityLabel = sq.city.label ?? '?';
