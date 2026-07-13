@@ -62,6 +62,153 @@ body,
   }
 }
 
+/* Floating '?' help button, top-right corner of the map. */
+#help-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1100;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #fff;
+  color: #2c3e50;
+  border: 1px solid #bbb;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+#help-btn:hover {
+  background: #eef;
+}
+
+/* Keep the top-right Leaflet controls (layers) clear of the help button. */
+.leaflet-top.leaflet-right {
+  margin-top: 52px;
+}
+
+/* Modal backdrop and centred dialog. */
+#help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+#help-overlay[hidden] {
+  display: none;
+}
+
+#help-dialog {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 22px 24px 24px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Language switch, in the top corner nearest the start of the text. */
+#help-lang-toggle {
+  position: absolute;
+  top: 16px;
+  inset-inline-start: 24px;
+  display: flex;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#help-lang-toggle button {
+  border: none;
+  background: #fff;
+  color: #555;
+  font-size: 12.5px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+#help-lang-toggle button + button {
+  border-inline-start: 1px solid #bbb;
+}
+
+#help-lang-toggle button.active {
+  background: #2c3e50;
+  color: #fff;
+  cursor: default;
+}
+
+#help-close {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  color: #666;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#help-close:hover {
+  background: #eee;
+  color: #2c3e50;
+}
+
+#help-dialog h2 {
+  margin: 20px 0 8px;
+  font-size: 20px;
+  color: #2c3e50;
+}
+
+#help-dialog .help-intro {
+  margin: 0 0 12px;
+  color: #555;
+}
+
+#help-dialog .help-steps {
+  margin: 0 0 20px;
+  padding-inline-start: 22px;
+}
+
+#help-dialog .help-steps li {
+  margin: 8px 0;
+}
+
+#help-got-it {
+  display: block;
+  width: 100%;
+  padding: 9px 8px;
+  background: #2c3e50;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#help-got-it:hover {
+  background: #22303d;
+}
+
 /* Floating hamburger/X toggle — shown only on mobile. */
 #sidebar-toggle {
   display: none;
@@ -382,10 +529,11 @@ body,
     margin-top: 52px;
   }
 
-  /* Don't let the progress pill collide with the toggle or overflow. */
+  /* Don't let the progress pill collide with the toggle, the help button,
+     or overflow. */
   #calc-overlay {
     left: 64px;
-    right: 12px;
+    right: 60px;
     transform: none;
     white-space: normal;
   }

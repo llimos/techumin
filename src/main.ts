@@ -4,6 +4,7 @@ import { booleanPointInPolygon, point as turfPoint } from '@turf/turf';
 import { TechumMap } from './map';
 import { Sidebar, type SidebarCallbacks } from './ui/sidebar';
 import { openReportWindow, renderReport } from './ui/report';
+import { Help } from './ui/help';
 import { TechumPipeline, type PipelineOutputs, type PipelineUpdate } from './pipeline';
 import { amahMeters, loadSettings, saveSettings } from './settings';
 import { dirOf, getLang, setLang, t } from './i18n';
@@ -36,6 +37,7 @@ const TXT = {
   calculatingShort: { en: 'Calculating…', he: 'מחשב…' },
   starting: { en: 'starting', he: 'מתחיל' },
   error: { en: 'Error:', he: 'שגיאה:' },
+  help: { en: 'Help', he: 'עזרה' },
 } as const;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -53,6 +55,14 @@ app.innerHTML = `
   <aside id="sidebar"></aside>
   <div id="map-wrap">
     <div id="map"></div>
+    <button id="help-btn" type="button" aria-label="Help">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.1 9a2.9 2.9 0 0 1 5.6 1c0 2-2.9 2.7-2.9 2.7" />
+        <path d="M12 17h.01" />
+      </svg>
+    </button>
     <div id="calc-overlay" hidden></div>
   </div>
 `;
@@ -116,11 +126,29 @@ let sidebar = buildSidebar();
 map.setAmahMeters(amahMeters(pipeline.getSettings()));
 overlay.dir = dirOf(getLang());
 
+// Help modal: opened by the '?' button, or automatically on the first visit.
+// Its language selector switches the whole app (via onSettingsChange).
+const help = new Help({
+  onLanguageChange: (language) => sidebarCallbacks.onSettingsChange({ language }),
+});
+const helpBtn = app.querySelector<HTMLButtonElement>('#help-btn')!;
+helpBtn.addEventListener('click', () => {
+  track('help_opened');
+  help.open();
+});
+function applyHelpLanguage(): void {
+  helpBtn.setAttribute('aria-label', t(TXT.help));
+  if (help.isOpen) help.render();
+}
+applyHelpLanguage();
+help.openIfFirstVisit();
+
 /** Rebuild the language-dependent UI in place after a language switch. */
 function applyLanguage(): void {
   sidebar = buildSidebar();
   map.setLanguage();
   overlay.dir = dirOf(getLang());
+  applyHelpLanguage();
   setSidebarOpen(app.classList.contains('sidebar-open')); // refresh the toggle's aria-label
   // Re-apply the dynamic state the rebuilt sidebar lost (warnings, hints,
   // overlay) in the new language; the transient status line is left blank.
