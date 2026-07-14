@@ -107,6 +107,7 @@ const TXT = {
     en: "Created l'zikui harabim by Shimon Lyons.",
     he: 'נוצר לזיכוי הרבים ע"י שמעון ליונס.',
   },
+  dedication: { en: 'לע"נ חיה לאה בת שאול ע"ה', he: 'לע"נ חיה לאה בת שאול ע"ה' },
   searching: { en: 'Searching…', he: 'מחפש…' },
   noResults: { en: 'No results.', he: 'אין תוצאות.' },
   searchFailed: { en: 'Search failed.', he: 'החיפוש נכשל.' },
@@ -313,6 +314,7 @@ export class Sidebar {
               3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013
               8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>${esc(t(TXT.sourceOnGitHub))}</a></p>
         <p class="credit">${esc(t(TXT.credit))}</p>
+        <p class="dedication">${esc(t(TXT.dedication))}</p>
       </section>
     `;
 

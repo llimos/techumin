@@ -658,7 +658,7 @@ select:focus-visible {
   margin-inline-end: 5px;
 }
 
-.about .credit {
+.about .credit, .about .dedication {
   margin-top: 12px;
   color: var(--text-muted);
   font-size: 12.5px;
