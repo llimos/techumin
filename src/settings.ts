@@ -277,7 +277,7 @@ export const DEFAULT_SETTINGS: Settings = {
   havlaahWidth: 'magenAvraham',
   havlaahLength: 'parallel',
   havlaahEruvStartCity: true,
-  eruvCityTechum: false,
+  eruvCityTechum: true,
   fetchRadiusM: 3000,
   language: detectLang(),
 };
