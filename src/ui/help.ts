@@ -30,8 +30,8 @@ const TXT = {
       he: 'לאחר החישוב, ניתן להוסיף עירוב תחומין בלחיצה על „הנחת עירוב תחומין”.',
     },
     {
-      en: 'Change the halachic opinions in the sidebar — the techum is recalculated automatically.',
-      he: 'שנו את השיטות ההלכתיות בסרגל הצד — התחום מחושב מחדש אוטומטית.',
+      en: 'Change the halachic opinions in the sidebar — the techum is recalculated automatically. Defaults are based on Mishna Berurah.',
+      he: 'שנו את השיטות ההלכתיות בסרגל הצד — התחום מחושב מחדש אוטומטית. ברירות המחדל מבוססות על המשנה ברורה.',
     },
     {
       en: 'Click “Generate report” to spell out all the calculations, to show to a rabbi.',
