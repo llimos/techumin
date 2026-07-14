@@ -88,8 +88,8 @@ const TXT = {
   },
   opinions: { en: 'Halachic opinions', he: 'שיטות הלכתיות' },
   eruvCityNotice: {
-    en: 'Even according to this opinion, most poskim do not allow returning to the start point when the eruv is more than 2000 amot from it.',
-    he: 'גם לפי שיטה זו, רוב הפוסקים אינם מתירים לחזור לנקודת המוצא כאשר העירוב רחוק ממנה יותר מ־2000 אמה.',
+    en: 'Even according to this opinion, many poskim do not allow returning to the start point when the eruv is more than 2000 amot from it.',
+    he: 'גם לפי שיטה זו, הרבה פוסקים אינם מתירים לחזור לנקודת המוצא כאשר העירוב רחוק ממנה יותר מ־2000 אמה.',
   },
   data: { en: 'Data', he: 'נתונים' },
   radiusLabel: { en: 'Initial building data radius:', he: 'רדיוס נתוני בניינים התחלתי:' },
@@ -158,10 +158,6 @@ const OPINION_GROUPS: { title: LString | null; items: OpinionItem[] }[] = [
     items: [
       { key: 'amahPreset' },
       { key: 'fourAmotMode', note: 'שצו:א ברמ"א; מ"ב מיקל' },
-      {
-        key: 'eruvCityTechum',
-        note: 'תח:א (שו"ע מחמיר, רמ"א מג"א ומ"ב מקילין). יל"ע אם מותר לחזור לביתו',
-      },
     ],
   },
   {
@@ -194,6 +190,15 @@ const OPINION_GROUPS: { title: LString | null; items: OpinionItem[] }[] = [
       {
         key: 'havlaahLength',
         note: 'נודע ביהודה מחמיר (מהדו"ת או"ח סי\' נ); חזו"א מיקל (או"ח סי; ק"י ס"ק י"ד)',
+      },
+    ],
+  },
+  {
+    title: { en: 'Eruv Techumin', he: 'עירוב תחומין' },
+    items: [
+      {
+        key: 'eruvCityTechum',
+        note: 'תח:א (שו"ע מחמיר, רמ"א מג"א ומ"ב מקילין). יל"ע אם מותר לחזור לביתו',
       },
       { key: 'havlaahEruvStartCity', note: 'תח:א ברמ"א; מ"ב מיקל' },
     ],
@@ -341,13 +346,13 @@ export class Sidebar {
               : el.value;
         if (key === 'amahPreset') this.toggleCustomAmah(raw === 'custom');
         if (key === 'fetchRadiusM') this.updateRadiusLabel(raw as number);
-        if (key === 'eruvCityTechum') this.toggleEruvNotice(raw as boolean);
+        if (key === 'eruvCityTechum' || key === 'havlaahEruvStartCity') this.toggleEruvNotice();
         this.cb.onSettingsChange({ [key]: raw } as Partial<Settings>);
       });
     }
     this.toggleCustomAmah(settings.amahPreset === 'custom');
     this.updateRadiusLabel(settings.fetchRadiusM);
-    this.toggleEruvNotice(settings.eruvCityTechum);
+    this.toggleEruvNotice();
 
     root.querySelector<HTMLFormElement>('#search-form')!.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -379,8 +384,14 @@ export class Sidebar {
     document.querySelector('#radius-label')!.textContent = (radiusM / 1000).toFixed(1);
   }
 
-  private toggleEruvNotice(show: boolean): void {
-    document.querySelector<HTMLElement>('#eruv-city-notice')!.hidden = !show;
+  /** The notice applies only when the eruv may sit anywhere in the techum and
+   *  the start city is not itself swallowed (which would moot the concern). */
+  private toggleEruvNotice(): void {
+    const checked = (key: keyof Settings): boolean =>
+      !!document.querySelector<HTMLInputElement>(`[data-setting="${key}"]`)?.checked;
+    document.querySelector<HTMLElement>('#eruv-city-notice')!.hidden = !(
+      checked('eruvCityTechum') && !checked('havlaahEruvStartCity')
+    );
   }
 
   setEruvState(phase: EruvPhase): void {
