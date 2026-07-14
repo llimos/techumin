@@ -4,10 +4,10 @@
  * per-step calculation log — something to print off and show to a Rabbi.
  */
 
-import type { ReportData, ReportStep } from '../pipeline';
+import type { ReportData } from '../pipeline';
 import { AMAH_LABELS, SETTING_META, amahMeters, type Settings } from '../settings';
 import { settingValueLabel } from '../settings';
-import { dirOf, getLang, t } from '../i18n';
+import { dirOf, getLang, t, type LString } from '../i18n';
 import type { LatLon } from '../types';
 import { DISCLAIMERS } from './sidebar';
 
@@ -58,8 +58,233 @@ const TXT = {
   options: { en: 'Halachic options', he: 'שיטות הלכתיות' },
   nonHalachic: { en: '(non-halachic)', he: '(לא הלכתי)' },
   steps: { en: 'Calculation steps', he: 'שלבי החישוב' },
+  thisRun: { en: 'For this calculation:', he: 'בחישוב זה:' },
   disclaimers: { en: 'Disclaimers', he: 'הבהרות' },
 } as const;
+
+/**
+ * A plain-language account of what each pipeline step does, shown in the
+ * report before that step's run-specific log. Paraphrased from the README,
+ * with the geometric tolerances the code actually uses; purely technical
+ * details (data services, caching) are left out. Indexed to match
+ * report.steps (0-5 the core steps, 6-7 the eruv re-measure).
+ */
+interface StepDescription {
+  intro: LString;
+  points?: LString[];
+}
+
+const STEP_DESCRIPTIONS: StepDescription[] = [
+  // 1. Fetch buildings
+  {
+    intro: {
+      en:
+        'All buildings inside a square around the chosen point are collected, and the ' +
+        'building the point falls inside — if any — is identified. The square’s half-width is ' +
+        'the data radius shown above. If buildings reach the edge of the loaded area, the city ' +
+        'may continue beyond it, and a warning is shown.',
+      he:
+        'נאספים כל הבניינים שבתוך ריבוע סביב הנקודה שנבחרה, ומזוהה הבניין שבתוכו נמצאת הנקודה, ' +
+        'אם ישנו. חצי רוחב הריבוע הוא רדיוס הנתונים המוצג למעלה. אם הבניינים מגיעים לקצה האזור ' +
+        'שנטען, ייתכן שהעיר נמשכת מעברו, ומוצגת אזהרה.',
+    },
+  },
+  // 2. Find cities
+  {
+    intro: { en: 'The buildings are grouped into halachic cities.', he: 'הבניינים מקובצים לערים הלכתיות.' },
+    points: [
+      {
+        en:
+          'Buildings separated by a gap of at most 70⅔ amot belong to the same city; the gaps ' +
+          'between them are filled in so the cluster reads as one built-up area.',
+        he:
+          'בניינים שהמרווח ביניהם אינו עולה על 70⅔ אמה שייכים לאותה עיר; הרווחים שביניהם מתמלאים ' +
+          'כך שהצבר נחשב לשטח בנוי אחד.',
+      },
+      {
+        en: 'A cluster of fewer than 6 buildings does not count as a city and stays a standalone structure.',
+        he: 'צבר של פחות מ־6 בניינים אינו נחשב לעיר ונשאר מבנה בודד.',
+      },
+    ],
+  },
+  // 3. Merge cities
+  {
+    intro: { en: 'Neighbouring cities are combined, in two passes:', he: 'ערים סמוכות מתאחדות, בשני שלבים:' },
+    points: [
+      {
+        en:
+          'Proximity: any two cities at most 141⅓ amot apart merge into one, repeated until ' +
+          'nothing further merges.',
+        he:
+          'קרבה: כל שתי ערים המרוחקות זו מזו 141⅓ אמה לכל היותר מתאחדות לאחת, וחוזר חלילה עד שלא ' +
+          'נותר מה לאחד.',
+      },
+      {
+        en:
+          'Triangle (ro’in) rule: given three cities A, B and C, if B is within 2000 amot of both ' +
+          'A and C and the gap between A and C is at most 282⅔ amot plus B’s width, then A and C ' +
+          'merge — B is regarded as if moved into the gap between them, so it need not actually ' +
+          'stand between them. B must lie opposite the gap, and the rule does not apply if the ' +
+          'straight line between A and C passes through a building of a third city.',
+        he:
+          'דין רואין: בשלוש ערים א, ב ו־ג — אם ב נמצאת בתוך 2000 אמה מכל אחת מ־א ו־ג, והרווח שבין ' +
+          'א ל־ג אינו עולה על 282⅔ אמה בתוספת רוחבה של ב, מתאחדות א ו־ג. ב נחשבת כאילו הוזזה אל ' +
+          'תוך הרווח שביניהן, ולכן אינה צריכה לעמוד ביניהן ממש. על ב לעמוד כנגד הרווח, והדין אינו ' +
+          'חל אם הקו הישר שבין א ל־ג עובר דרך בניין של עיר שלישית.',
+      },
+    ],
+  },
+  // 4. Square the city
+  {
+    intro: {
+      en:
+        'Each city is enclosed in a rectangle (ribua ha’ir), whose angle sets the direction of ' +
+        'the techum measurement. The angle is chosen by the first rule below that applies:',
+      he:
+        'כל עיר נסגרת במלבן (ריבוע העיר), וזווית המלבן קובעת את כיוון מדידת התחום. הזווית נקבעת ' +
+        'לפי הכלל הראשון החל מבין הבאים:',
+    },
+    points: [
+      {
+        en:
+          'Already oblong: if the city already fills a bounding rectangle at some angle, it is ' +
+          'taken as squared at that angle. It counts as filling the rectangle when it covers at ' +
+          'least 95% of the rectangle’s area, or when its outline nowhere reaches more than a ' +
+          'small perceptual tolerance — about 2% of the shorter side, and at least 4 metres — ' +
+          'inside the rectangle’s edges.',
+        he:
+          'כבר מלבני: אם העיר כבר ממלאת מלבן חוסם בזווית כלשהי, היא נחשבת מרובעת באותה זווית. היא ' +
+          'נחשבת כממלאה את המלבן כאשר היא מכסה 95% לפחות משטח המלבן, או כאשר קו המתאר שלה אינו ' +
+          'נכנס בשום מקום יותר מסטייה מזערית שאין העין מבחינה בה — כ־2% מהצלע הקצרה, ולפחות ' +
+          '4 מטרים — מקצות המלבן.',
+      },
+      {
+        en:
+          'Straight side (Chazon Ish, configurable): when enabled, if one side of the city runs ' +
+          'as a straight line for its whole length, the squaring is aligned to that side. The ' +
+          'side must stay straight to within that same tolerance (about 2% of its length, at ' +
+          'least 4 metres) and span at least 95% of the city’s length.',
+        he:
+          'צלע ישרה (חזון איש, ניתן לבחירה): כאשר האפשרות פעילה, אם צלע אחת של העיר ישרה לכל ' +
+          'אורכה, הריבוע מיושר לפי אותה צלע. על הצלע להישאר ישרה בגבול אותה סטייה (כ־2% מאורכה, ' +
+          'ולפחות 4 מטרים) ולהשתרע על 95% לפחות מאורך העיר.',
+      },
+      {
+        en: 'Otherwise the city is squared true north–south.',
+        he: 'אם לא — העיר מרובעת לפי צפון–דרום אמיתי.',
+      },
+      {
+        en:
+          'Keshet/gam exclusion: a deep concave bay in the outline is measured along its chord — ' +
+          'the line between the two horns of the bow. A bay whose chord spans at least 4000 amot ' +
+          'is cut out of the squaring. Configurable: whether it must also run more than 2000 amot ' +
+          'deep, and whether to cut the whole bay or only the part still wider than 4000 amot.',
+        he:
+          'הוצאת קשת/גאם: מפרץ קעור עמוק בקו המתאר נמדד לאורך המיתר שלו — הקו שבין שתי קרני הקשת. ' +
+          'מפרץ שמיתרו משתרע על 4000 אמה לפחות מוצא מן הריבוע. ניתן לבחירה: אם נדרש גם שיהיה עמוק ' +
+          'יותר מ־2000 אמה, ואם להוציא את כל המפרץ או רק את החלק שעודנו רחב מ־4000 אמה.',
+      },
+      {
+        en: 'Rema (configurable): add an extra 70⅔ amot around the squaring.',
+        he: 'רמ"א (ניתן לבחירה): מוסיפים 70⅔ אמה סביב הריבוע.',
+      },
+    ],
+  },
+  // 5. Shvita bounds
+  {
+    intro: {
+      en: 'The area the techum is measured from (the shvita) is fixed by where the point sits:',
+      he: 'השטח שממנו נמדד התחום (השביתה) נקבע לפי מקום הנקודה:',
+    },
+    points: [
+      {
+        en:
+          'Inside a city → that city’s squaring, at its angle. The squared-off corners of the ' +
+          'ribua are only a measurement construct and do not themselves count as part of the city.',
+        he:
+          'בתוך עיר → ריבוע אותה עיר, בזוויתו. פינות הריבוע המרובעות הן רק אמצעי מדידה ואינן ' +
+          'נחשבות כשלעצמן לחלק מן העיר.',
+      },
+      {
+        en: 'Otherwise inside a building → the building’s north–south bounding rectangle.',
+        he: 'אחרת, בתוך בניין → המלבן החוסם של הבניין לפי צפון–דרום.',
+      },
+      {
+        en:
+          'Otherwise, on open ground → a square of 4 amot around the point (configurable: 4 amot ' +
+          'in each direction, or 4 amot in total).',
+        he:
+          'אחרת, בשטח פתוח → ריבוע של 4 אמות סביב הנקודה (ניתן לבחירה: 4 אמות לכל רוח, או 4 אמות ' +
+          'בסך הכל).',
+      },
+    ],
+  },
+  // 6. Measure the techum
+  {
+    intro: {
+      en:
+        'From each corner of the shvita bounds, 2000 amot are measured outward along the two ' +
+        'axes of the recorded angle.',
+      he:
+        'מכל פינה של גבולות השביתה נמדדות 2000 אמה כלפי חוץ, לאורך שני הצירים של הזווית שנקבעה.',
+    },
+    points: [
+      {
+        en:
+          'Gradient rule: each line follows the ground, with the elevation sampled every 50 amot ' +
+          '(a rope’s length). Ground gentler than a 1:3.6 slope is measured along the surface; ' +
+          'steeper ground is measured as the crow flies — unless it descends to more than 2000 ' +
+          'amot below the start, in which case it too is measured along the surface.',
+        he:
+          'דין המדרון: כל קו הולך לפי פני הקרקע, כאשר הגובה נדגם כל 50 אמה (אורך חבל). קרקע ' +
+          'ששיפועה מתון מ־1:3.6 נמדדת לאורך פני השטח; קרקע תלולה יותר נמדדת באוויר — אלא אם היא ' +
+          'יורדת ליותר מ־2000 אמה מתחת לנקודת ההתחלה, ואז גם היא נמדדת לאורך פני השטח.',
+      },
+      {
+        en:
+          'Joining the sides: the four sides are joined and extended until they meet, so the ' +
+          'techum has full squared corners. Where two lines in the same direction come out ' +
+          'unequal, configurable: extend the shorter to match the longer, or join their ends on ' +
+          'a diagonal.',
+        he:
+          'חיבור הצלעות: ארבע הצלעות מחוברות ומוארכות עד שהן נפגשות, כך שלתחום פינות מרובעות ' +
+          'שלמות. היכן ששני קווים באותו כיוון יוצאים לא שווים, ניתן לבחירה: מאריכים את הקצר עד ' +
+          'לארוך, או מחברים את קצותיהם באלכסון.',
+      },
+      {
+        en:
+          'Havla’ah (swallowed cities): a whole city that lies inside the measured techum is ' +
+          '“swallowed” — its length counts as only 4 amot, so the techum reaches past it by its ' +
+          'length less 4 amot. A swallowed city wider than the techum can also push it out ' +
+          'sideways, level with the city. How far, in each case, is configurable (see the ' +
+          'options above).',
+        he:
+          'הבלעה (ערים מובלעות): עיר שלמה הנמצאת בתוך התחום הנמדד "מובלעת" — אורכה נחשב כ־4 אמות ' +
+          'בלבד, וכך התחום נמשך מעברה כאורכה פחות 4 אמות. עיר מובלעת הרחבה מן התחום עשויה גם לדחוף ' +
+          'אותו לצדדים, כנגד העיר. עד כמה, בכל מקרה, ניתן לבחירה (ראו האפשרויות למעלה).',
+      },
+    ],
+  },
+  // 7. Shvita bounds (from the eruv)
+  {
+    intro: {
+      en:
+        'An eruv techumin has been placed, so the shvita is taken from the eruv’s location ' +
+        'instead of the start point. Its bounds are found exactly as in step 5 — the city’s ' +
+        'squaring if the eruv is in a city, the building if in a building, otherwise 4 amot.',
+      he:
+        'הונח עירוב תחומין, ולכן השביתה נלקחת ממקום העירוב במקום מנקודת המוצא. גבולותיה נקבעים ' +
+        'בדיוק כמו בשלב 5 — ריבוע העיר אם העירוב בעיר, הבניין אם בבניין, ואם לאו 4 אמות.',
+    },
+  },
+  // 8. Measure the techum (from the eruv)
+  {
+    intro: {
+      en: 'The techum is measured afresh from the eruv’s shvita bounds, by the same rule as step 6.',
+      he: 'התחום נמדד מחדש מגבולות השביתה של העירוב, לפי אותו כלל של שלב 6.',
+    },
+  },
+];
 
 /**
  * Open the report tab immediately (synchronously, inside the click, so popup
@@ -128,17 +353,35 @@ function legend(hasEruv: boolean): string {
   return `<p class="legend">${items.join('')}</p>`;
 }
 
-function stepSections(steps: ReportStep[]): string {
-  return steps
-    .filter((s) => s.logs.length > 0 || s.warnings.length > 0)
-    .map(
-      (s) => `
+function describe(desc: StepDescription | undefined): string {
+  if (!desc) return '';
+  const intro = `<p class="desc">${esc(t(desc.intro))}</p>`;
+  const points = desc.points?.length
+    ? `<ul class="desc">${desc.points.map((p) => `<li>${esc(t(p))}</li>`).join('')}</ul>`
+    : '';
+  return intro + points;
+}
+
+function stepSections(report: ReportData): string {
+  const hasEruv = report.eruvPoint !== null;
+  return report.steps
+    .map((s, i) => {
+      // The core steps (0-5) always ran when there is a calculation, so their
+      // description is shown even without a step-specific log; the eruv steps
+      // (6-7) only apply — and only appear — when an eruv has been placed.
+      const isEruvStep = i >= 6;
+      if (isEruvStep ? !hasEruv : !report.point) return '';
+      const desc = describe(STEP_DESCRIPTIONS[i]);
+      const hasData = s.logs.length > 0 || s.warnings.length > 0;
+      if (!desc && !hasData) return '';
+      return `
       <div class="step">
         <h3>${esc(t(s.title))}</h3>
-        ${s.logs.length ? `<ul class="log">${s.logs.map((l) => `<li>${esc(t(l))}</li>`).join('')}</ul>` : ''}
+        ${desc}
+        ${s.logs.length ? `<p class="run-label">${esc(t(TXT.thisRun))}</p><ul class="log">${s.logs.map((l) => `<li>${esc(t(l))}</li>`).join('')}</ul>` : ''}
         ${s.warnings.length ? `<ul class="warnings">${s.warnings.map((w) => `<li>${esc(t(w))}</li>`).join('')}</ul>` : ''}
-      </div>`,
-    )
+      </div>`;
+    })
     .join('');
 }
 
@@ -198,6 +441,10 @@ function reportHtml({ report, imageDataUrl, appUrl }: ReportInput): string {
   td { border: 1px solid var(--border); padding: 6px 8px; text-align: start; font-size: 14px; vertical-align: top; }
   .step { margin: 14px 0; }
   .step h3 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
+  p.desc { margin: 4px 0; font-size: 14px; color: var(--text); }
+  ul.desc { margin: 4px 0; padding-inline-start: 22px; font-size: 14px; color: var(--text); }
+  ul.desc li { margin: 2px 0; }
+  .run-label { margin: 8px 0 2px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
   ul.log, ul.warnings { margin: 4px 0; padding-inline-start: 22px; font-size: 14px; }
   ul.warnings li { color: var(--warning); }
   ul.disclaimers { padding-inline-start: 22px; font-size: 13px; color: var(--text-muted); }
@@ -244,7 +491,7 @@ function reportHtml({ report, imageDataUrl, appUrl }: ReportInput): string {
 
   <section>
     <h2>${esc(t(TXT.steps))}</h2>
-    ${stepSections(report.steps)}
+    ${stepSections(report)}
   </section>
 
   <section>
