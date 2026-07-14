@@ -55,6 +55,9 @@ body,
   margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
+  /* Inherited by every checkbox/range/radio — sidebar controls and the
+     Leaflet layers control alike — so they all tick in the accent colour. */
+  accent-color: var(--accent);
 }
 
 #app {
@@ -493,11 +496,6 @@ select:focus-visible {
 #sidebar input[type='range'] {
   display: block;
   width: 100%;
-}
-
-#sidebar input[type='checkbox'],
-#sidebar input[type='range'] {
-  accent-color: var(--accent);
 }
 
 #sidebar input[type='checkbox'] {
