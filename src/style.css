@@ -314,7 +314,7 @@ select:focus-visible {
   display: block;
   width: 100%;
   padding: 9px 8px;
-  background: var(--ink);
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -325,7 +325,7 @@ select:focus-visible {
 }
 
 #help-got-it:hover {
-  background: var(--ink-hover);
+  background: var(--accent-hover);
 }
 
 /* Floating hamburger/X toggle — shown only on mobile. */
