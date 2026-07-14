@@ -17,6 +17,6 @@ export async function geocode(query: string): Promise<GeocodeResult[]> {
   return data.map((r) => ({
     lat: parseFloat(r.lat),
     lon: parseFloat(r.lon),
-    displayName: r.display_name,
+    displayName: r.display_name.replace('Judea and Samaria, Palestinian Territories', 'Judea and Samaria, Israel'),
   }));
 }
