@@ -158,36 +158,62 @@ function reportHtml({ report, imageDataUrl, appUrl }: ReportInput): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${esc(t(TXT.title))}</title>
 <style>
+  /* Palette mirrors the app's design tokens in src/style.css — keep in sync. */
+  :root {
+    --ink: #2c3e50;
+    --accent: #16a085;
+    --accent-hover: #12886f;
+    --link: #2563a8;
+    --warning: #935f00;
+    --surface: #ffffff;
+    --border: #e4e7ea;
+    --border-strong: #c7ccd2;
+    --text: #263238;
+    --text-muted: #5a6570;
+    --text-subtle: #8a929b;
+    --radius-sm: 6px;
+  }
   body {
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     max-width: 800px;
     margin: 24px auto;
     padding: 0 16px;
-    color: #222;
+    color: var(--text);
     line-height: 1.45;
   }
-  h1 { margin: 0 0 4px; }
-  h2 { margin: 0 0 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
-  .meta { color: #555; margin: 2px 0; font-size: 14px; }
+  h1 { margin: 0 0 4px; color: var(--ink); }
+  h2 { margin: 0 0 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+  .meta { color: var(--text-muted); margin: 2px 0; font-size: 14px; }
   section { margin: 24px 0; }
-  img.map { max-width: 100%; height: auto; border: 1px solid #ccc; }
-  .placeholder { border: 1px dashed #999; padding: 32px; text-align: center; color: #666; }
+  img.map { max-width: 100%; height: auto; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); }
+  .placeholder { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 32px; text-align: center; color: var(--text-muted); }
   .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 8px 0 4px; }
   .swatch { display: inline-block; width: 22px; vertical-align: middle; margin-inline-end: 6px; }
   .dot {
     display: inline-block; width: 11px; height: 11px; border-radius: 50%;
     background: #e74c3c; border: 2px solid #c0392b; vertical-align: middle; margin-inline-end: 6px;
   }
-  .map-notes { color: #555; font-size: 13px; margin: 4px 0; }
+  .map-notes { color: var(--text-muted); font-size: 13px; margin: 4px 0; }
   table { border-collapse: collapse; width: 100%; }
-  td { border: 1px solid #ddd; padding: 6px 8px; text-align: start; font-size: 14px; vertical-align: top; }
+  td { border: 1px solid var(--border); padding: 6px 8px; text-align: start; font-size: 14px; vertical-align: top; }
   .step { margin: 14px 0; }
-  .step h3 { margin: 0 0 4px; font-size: 15px; }
+  .step h3 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
   ul.log, ul.warnings { margin: 4px 0; padding-inline-start: 22px; font-size: 14px; }
-  ul.warnings li { color: #935f00; }
-  ul.disclaimers { padding-inline-start: 22px; font-size: 13px; color: #555; }
-  #print-btn { float: inline-end; padding: 8px 14px; font-size: 14px; cursor: pointer; }
-  a { color: #2980b9; word-break: break-all; }
+  ul.warnings li { color: var(--warning); }
+  ul.disclaimers { padding-inline-start: 22px; font-size: 13px; color: var(--text-muted); }
+  #print-btn {
+    float: inline-end;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  #print-btn:hover { background: var(--accent-hover); }
+  a { color: var(--link); word-break: break-all; }
   @media print {
     .no-print { display: none; }
     body { margin: 0 auto; }

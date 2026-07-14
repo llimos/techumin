@@ -245,17 +245,17 @@ export class Sidebar {
       <div id="lang-toggle" role="group" aria-label="Language / שפה">
         ${langBtn('en', 'En')}${langBtn('he', 'ע')}
       </div>
-      <h1>Techum.app</h1>
+      <h1>Techum<span class="brand-accent">.app</span></h1>
       <p class="subtitle">${esc(t(TXT.subtitle))}</p>
 
       <section>
         <h2>${esc(t(TXT.location))}</h2>
         <form id="search-form">
           <input id="search-input" type="text" placeholder="${esc(t(TXT.searchPlaceholder))}" autocomplete="off" />
-          <button type="submit">${esc(t(TXT.search))}</button>
+          <button type="submit" class="btn btn-primary">${esc(t(TXT.search))}</button>
         </form>
         <div id="search-results"></div>
-        <button id="geolocate" type="button">${esc(t(TXT.useMyLocation))}</button>
+        <button id="geolocate" type="button" class="btn btn-secondary">${esc(t(TXT.useMyLocation))}</button>
         <p class="hint">${esc(t(TXT.orClickMap))}</p>
         <div id="status"></div>
       </section>
@@ -267,13 +267,13 @@ export class Sidebar {
 
       <section>
         <h2>${esc(t(TXT.eruvTechumin))}</h2>
-        <button id="eruv-btn" type="button" disabled>${esc(t(TXT.placeEruv))}</button>
+        <button id="eruv-btn" type="button" class="btn btn-primary" disabled>${esc(t(TXT.placeEruv))}</button>
         <p class="hint" id="eruv-hint">${esc(t(TXT.calcFirst))}</p>
       </section>
 
       <section>
         <h2>${esc(t(TXT.report))}</h2>
-        <button id="report-btn" type="button" disabled>${esc(t(TXT.generateReport))}</button>
+        <button id="report-btn" type="button" class="btn btn-primary" disabled>${esc(t(TXT.generateReport))}</button>
         <p class="hint" id="report-hint">${esc(t(TXT.calcFirst))}</p>
       </section>
 
