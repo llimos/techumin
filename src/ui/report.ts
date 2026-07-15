@@ -132,6 +132,17 @@ const STEP_DESCRIPTIONS: StepDescription[] = [
           'תוך הרווח שביניהן, ולכן אינה צריכה לעמוד ביניהן ממש. על ב לעמוד כנגד הרווח, והדין אינו ' +
           'חל אם הקו הישר שבין א ל־ג עובר דרך בניין של עיר שלישית.',
       },
+      {
+        en:
+          'Cities merged by proximity form one built-up area: the gap between them, wherever ' +
+          'they face each other within 141⅓ amot, counts as part of the city, so a point ' +
+          'standing there is inside the city. Gaps bridged only by the triangle rule — a ' +
+          'measuring fiction — remain open ground.',
+        he:
+          'ערים שהתאחדו מחמת סמיכות נעשות שטח בנוי אחד: הרווח שביניהן, בכל מקום שבו הן פונות זו ' +
+          'אל זו בתוך 141⅓ אמה, נחשב לחלק מהעיר, ולכן נקודה העומדת בו היא בתוך העיר. רווחים ' +
+          'שהתאחדו רק בדין רואין — שהוא דין ראייה בלבד — נשארים שטח פתוח.',
+      },
     ],
   },
   // 4. Square the city

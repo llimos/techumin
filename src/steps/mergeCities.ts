@@ -4,8 +4,9 @@
  * cities, so the triangle rule works with whole cities, not raw fragments.
  */
 
+import { buffer, difference, intersect, featureCollection } from '@turf/turf';
 import type { Feature, Polygon, Position } from 'geojson';
-import type { City, PipelineContext } from '../types';
+import type { City, PipelineContext, Poly } from '../types';
 import type { LString } from '../i18n';
 import {
   CITY_GAP_AMOT,
@@ -24,7 +25,7 @@ import {
   type GapLine,
 } from '../geo/gaps';
 import { allPositions } from '../geo/rotate';
-import { featureFromLocal } from '../geo/project';
+import { featureFromLocal, featureToLocal } from '../geo/project';
 import { bboxGap, bboxOf, type BBox } from '../geo/dilate';
 import { mergeDataEdges } from '../geo/dataEdges';
 import { convexHull } from '../geo/minRect';
@@ -80,7 +81,7 @@ function mergePlain(ctx: PipelineContext, settings: Settings, cities: City[]): C
       }
     }
   }
-  return buildMerged(ctx, cities, find, comp / 2);
+  return buildMerged(ctx, cities, find, amah);
 }
 
 /**
@@ -281,7 +282,7 @@ function mergeTriangles(ctx: PipelineContext, settings: Settings, cities: City[]
       }
     }
   }
-  return buildMerged(ctx, cities, find, comp / 2);
+  return buildMerged(ctx, cities, find, amah);
 }
 
 /**
@@ -294,8 +295,9 @@ function buildMerged(
   ctx: PipelineContext,
   cities: City[],
   find: (i: number) => number,
-  halfGapM: number,
+  amah: number,
 ): City[] {
+  const halfGapM = (CITY_GAP_AMOT * amah) / 2;
   const byRoot = new Map<number, number[]>();
   cities.forEach((_, i) => {
     const root = find(i);
@@ -311,12 +313,14 @@ function buildMerged(
       continue;
     }
     const localPolys = idxs.map((i) => cities[i].localPolygon);
-    const localPolygon = unionAll(localPolys) ?? localPolys[0];
+    const closeM = closeRadiusM(amah);
+    const rawUnion = unionAll(localPolys) ?? localPolys[0];
+    const localPolygon = closeSeams(ctx, rawUnion, closeM);
     const polygon = featureFromLocal(ctx.frame, localPolygon);
     merged.push({
       polygon,
       localPolygon,
-      builtUpPolygon: builtUpOutline(polygon, halfGapM),
+      builtUpPolygon: connectedBuiltUp(ctx, polygon, localPolygon, rawUnion, halfGapM),
       hullPointsLocal: idxs.flatMap((i) => cities[i].hullPointsLocal),
       buildingHullsLocal: idxs.flatMap((i) => cities[i].buildingHullsLocal),
       buildingCount: idxs.reduce((s, i) => s + cities[i].buildingCount, 0),
@@ -325,6 +329,99 @@ function buildMerged(
     });
   }
   return merged;
+}
+
+/**
+ * Radius of the morphological closing that seals a merged city's seams: half
+ * the outline merge gap (70⅔ amot between the dilated outlines at the 141⅓-amot
+ * building distance), plus 0.5 m so parts at exactly the merge distance still
+ * seal.
+ */
+function closeRadiusM(amah: number): number {
+  return ((MERGE_GAP_AMOT - CITY_GAP_AMOT) * amah) / 2 + 0.5;
+}
+
+/**
+ * Seal the gaps between a merged city's parts, so the merged outline is one
+ * shape and a point standing between the parts is inside the city. A
+ * morphological closing — dilate by `closeM`, erode back — fills the space
+ * between the parts wherever their outlines face each other within the merge
+ * distance. Every point in such a gap lies within one part's 70⅔-amot ibur,
+ * and the meeting iburim are what make the parts one city — so the gap itself
+ * is city ground, unlike the ribua corners or the open strip around the
+ * outside. Wider gap regions (including triangle-rule/ro'in gaps, a measuring
+ * fiction) stay open. The final union keeps the exact original outline against
+ * buffer drift and drops any holes the seal encloses. Local frame in and out
+ * (the union runs in the local metric frame, where unionAll's snap grid is
+ * millimetres — in geographic degrees it would be ~111 m).
+ */
+function closeSeams(ctx: PipelineContext, localPolygon: Poly, closeM: number): Poly {
+  try {
+    const dilated = buffer(featureFromLocal(ctx.frame, localPolygon), closeM / 1000, {
+      units: 'kilometers',
+    });
+    const closed = dilated && buffer(dilated, -closeM / 1000, { units: 'kilometers' });
+    if (!closed) return localPolygon;
+    return unionAll([localPolygon, featureToLocal(ctx.frame, closed as Poly)]) ?? localPolygon;
+  } catch {
+    // Degenerate geometry — keep the unsealed union.
+    return localPolygon;
+  }
+}
+
+/**
+ * Built-up outline of a merged city that stays connected wherever `polygon`
+ * is. Eroding polygon by halfGap to hug the buildings (builtUpOutline) would
+ * dissolve the thin seal bridges between merged parts — near the 141⅓-amot
+ * merge limit a bridge is only metres wide — leaving parts drawn as separate
+ * islands. A closing can't reliably re-bridge them: once eroded the parts sit
+ * the full building gap apart, too far to span across a short facing edge.
+ *
+ * Instead we rebuild each bridge explicitly. `localPolygon − rawUnion` is
+ * exactly the fill closeSeams added between the parts (a clean cut: the rest of
+ * the outline is shared verbatim, so there are none of the perimeter slivers a
+ * buffered opening would leave). That fill sits between the *dilated* parts, so
+ * it stops halfGap short of the eroded bodies; dilating it by halfGap and
+ * clipping to `polygon` grows a connector that overlaps both eroded parts and
+ * stays inside the city. Unioning the connectors onto the eroded body restores
+ * every join the merge made. Triangle-rule gaps aren't in `localPolygon`, so no
+ * bridge is built there and they stay open.
+ */
+function connectedBuiltUp(
+  ctx: PipelineContext,
+  polygon: Poly,
+  localPolygon: Poly,
+  rawUnion: Poly,
+  halfGapM: number,
+): Poly {
+  const eroded = builtUpOutline(polygon, halfGapM);
+  if (eroded === polygon) return polygon; // erosion vanished — nothing to hug
+  try {
+    const bridges = difference(featureCollection([localPolygon, rawUnion]));
+    if (!bridges) return eroded; // parts already touched — no fill was added
+    const reach = buffer(featureFromLocal(ctx.frame, bridges), halfGapM / 1000, {
+      units: 'kilometers',
+    });
+    const connector = reach && intersect(featureCollection([reach as Poly, polygon]));
+    if (!connector) return eroded;
+    const merged = unionAll([
+      featureToLocal(ctx.frame, eroded),
+      featureToLocal(ctx.frame, connector as Poly),
+    ]);
+    if (!merged) return eroded;
+    const sealed = featureFromLocal(ctx.frame, merged);
+    // Connectors only ever join eroded parts; if buffer/clip noise instead
+    // added a stray sliver, the plain built-up outline was already better.
+    return pieceCount(sealed) <= pieceCount(eroded) ? sealed : eroded;
+  } catch {
+    // Degenerate geometry — keep the plain built-up outline.
+    return eroded;
+  }
+}
+
+/** Number of disjoint polygons in a feature. */
+function pieceCount(poly: Poly): number {
+  return poly.geometry.type === 'MultiPolygon' ? poly.geometry.coordinates.length : 1;
 }
 
 /** Extent of a point set projected onto the from→to direction (meters). */

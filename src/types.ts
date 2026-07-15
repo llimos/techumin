@@ -26,7 +26,9 @@ export interface City {
   /**
    * City outline with ibur gaps filled (buildings dilated by half the 70⅔
    * gap and unioned), geographic coordinates — used for keshet checks and as
-   * the merge/shvita geometry that expects the dilation.
+   * the merge/shvita geometry that expects the dilation. For a merged city
+   * the gaps between the parts are sealed too, wherever the parts face each
+   * other within the 141⅓-amot merge distance (see closeSeams).
    */
   polygon: Poly;
   /** Same outline in the local planar frame (meters). */
@@ -35,7 +37,8 @@ export interface City {
    * The built-up outline for display: `polygon` eroded back by the half gap,
    * so the drawn border hugs the outermost buildings rather than the dilation.
    * Matches findShvita's city-bounds test (inside and ≥ half a gap from the
-   * edge). Geographic coordinates.
+   * edge). For a merged city the seams the erosion would reopen are re-sealed
+   * (see closeSeams), so the drawn area stays connected. Geographic coordinates.
    */
   builtUpPolygon: Poly;
   /**
