@@ -103,31 +103,39 @@ export async function measureTechum(
     // exclusion runs deeper than the measured distance.
     techumRot = minkowskiSumRect(rot, dW, dE, dS, dN);
   } else {
-    // Join on the diagonal: each side runs between its own two measured ray
-    // endpoints — a diagonal edge when terrain leaves them unequal — instead
-    // of extending the shorter line to the longer. Corners are still squared
-    // out by extending the side lines to their intersections.
-    const north: Line = [
-      [minX, maxY + dNw],
-      [maxX, maxY + dNe],
-    ];
-    const east: Line = [
-      [maxX + dEn, maxY],
-      [maxX + dEs, minY],
-    ];
-    const south: Line = [
-      [maxX, minY - dSe],
-      [minX, minY - dSw],
-    ];
-    const west: Line = [
-      [minX - dWs, minY],
-      [minX - dWn, maxY],
-    ];
-    const nw = lineIntersection(west, north);
-    const ne = lineIntersection(north, east);
-    const se = lineIntersection(east, south);
-    const sw = lineIntersection(south, west);
-    techumRot = turfPolygon([[nw, ne, se, sw, nw]]) as Poly;
+    // Join on the diagonal: level with the city — between each side's own two
+    // measured ray endpoints — the edge runs straight between them, a diagonal
+    // when terrain leaves the rays unequal. Past the city the edge turns
+    // perpendicular to the rays, squaring each corner at the outermost measured
+    // reach on the two axes rather than extending the diagonals until they meet.
+    const nwN: Position = [minX, maxY + dNw]; // north ray from the NW corner
+    const neN: Position = [maxX, maxY + dNe]; // north ray from the NE corner
+    const neE: Position = [maxX + dEn, maxY]; // east ray from the NE corner
+    const seE: Position = [maxX + dEs, minY]; // east ray from the SE corner
+    const seS: Position = [maxX, minY - dSe]; // south ray from the SE corner
+    const swS: Position = [minX, minY - dSw]; // south ray from the SW corner
+    const swW: Position = [minX - dWs, minY]; // west ray from the SW corner
+    const nwW: Position = [minX - dWn, maxY]; // west ray from the NW corner
+    // Each corner meets where one side's perpendicular extension (level with
+    // its ray endpoint) crosses the adjacent side's — a right angle at the two
+    // sides' measured reaches.
+    techumRot = turfPolygon([
+      [
+        nwN,
+        neN,
+        [maxX + dEn, maxY + dNe], // NE corner
+        neE,
+        seE,
+        [maxX + dEs, minY - dSe], // SE corner
+        seS,
+        swS,
+        [minX - dWs, minY - dSw], // SW corner
+        swW,
+        nwW,
+        [minX - dWn, maxY + dNw], // NW corner
+        nwN,
+      ],
+    ]) as Poly;
   }
 
   // A keshet-excluded squaring indents the techum where the exclusion runs
@@ -325,13 +333,25 @@ function havlaahBumps(
       // either the whole original techum width, or only the city's own width
       // (clamped to the techum width; the widthwise push does not carry past
       // the city).
+      //
+      // In diagonal mode the techum edge is slanted below the flat `reachOut`,
+      // so a level rect starting at the city (near) or a tongue starting at
+      // reachOut can land entirely beyond the slant — leaving the havla'ah a
+      // closed box glued to the techum with no opening into it. Bridge from the
+      // shvita edge out to the city at the city's own width so the bump merges
+      // into the techum, and start the outward tongue at the city's far edge so
+      // it joins that bridge. In extend mode the flat base techum already
+      // covers both, so leave those cases untouched.
+      const diagonal = settings.unequalLines !== 'extend';
+      if (diagonal) rects.push(sideRect(cross, s.edge, near));
       rects.push(sideRect(band, near, far));
       if (bumpOut !== undefined) {
         const bumpBand: [number, number] =
           settings.havlaahLength === 'fullWidth'
             ? s.techumSpan
             : [Math.max(cross[0], s.techumSpan[0]), Math.min(cross[1], s.techumSpan[1])];
-        if (bumpBand[1] > bumpBand[0]) rects.push(sideRect(bumpBand, reachOut, bumpOut));
+        const bumpInner = diagonal ? far : reachOut;
+        if (bumpBand[1] > bumpBand[0]) rects.push(sideRect(bumpBand, bumpInner, bumpOut));
       }
       count++;
 
@@ -368,17 +388,6 @@ function havlaahBumps(
     }
   }
   return { rects, count };
-}
-
-type Line = [Position, Position];
-
-/** Intersection of the infinite lines through segments a and b. */
-function lineIntersection(a: Line, b: Line): Position {
-  const [[x1, y1], [x2, y2]] = a;
-  const [[x3, y3], [x4, y4]] = b;
-  const denom = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3);
-  const t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / denom;
-  return [x1 + t * (x2 - x1), y1 + t * (y2 - y1)];
 }
 
 interface RayResult {

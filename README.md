@@ -123,9 +123,11 @@ along the way:
 
 Where the two rays pointing the same direction from adjacent corners end at
 unequal distances, *configurable:* extend the shorter line to match the
-longer, or join the endpoints on a diagonal. Finally the sides are joined and
-extended to their intersections, so the techum includes full (squared)
-corners. Where a keshet/gam exclusion indents the squaring deeper than the
+longer, or join the endpoints on a diagonal. With the diagonal option the side
+is diagonal only level with the city — between its two rays; past the city it
+turns perpendicular to the rays, so each corner squares off at the outermost
+measured reach on the two axes rather than where the extended diagonals would
+cross. Where a keshet/gam exclusion indents the squaring deeper than the
 measured distance, the techum follows the indented shape at the measured
 side distances.
 
