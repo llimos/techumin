@@ -333,25 +333,13 @@ function havlaahBumps(
       // either the whole original techum width, or only the city's own width
       // (clamped to the techum width; the widthwise push does not carry past
       // the city).
-      //
-      // In diagonal mode the techum edge is slanted below the flat `reachOut`,
-      // so a level rect starting at the city (near) or a tongue starting at
-      // reachOut can land entirely beyond the slant — leaving the havla'ah a
-      // closed box glued to the techum with no opening into it. Bridge from the
-      // shvita edge out to the city at the city's own width so the bump merges
-      // into the techum, and start the outward tongue at the city's far edge so
-      // it joins that bridge. In extend mode the flat base techum already
-      // covers both, so leave those cases untouched.
-      const diagonal = settings.unequalLines !== 'extend';
-      if (diagonal) rects.push(sideRect(cross, s.edge, near));
       rects.push(sideRect(band, near, far));
       if (bumpOut !== undefined) {
         const bumpBand: [number, number] =
           settings.havlaahLength === 'fullWidth'
             ? s.techumSpan
             : [Math.max(cross[0], s.techumSpan[0]), Math.min(cross[1], s.techumSpan[1])];
-        const bumpInner = diagonal ? far : reachOut;
-        if (bumpBand[1] > bumpBand[0]) rects.push(sideRect(bumpBand, bumpInner, bumpOut));
+        if (bumpBand[1] > bumpBand[0]) rects.push(sideRect(bumpBand, reachOut, bumpOut));
       }
       count++;
 
