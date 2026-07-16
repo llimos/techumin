@@ -5,7 +5,7 @@ interactive map. Everything runs client-side in the browser — there is no
 server component; the app only calls public data services (OpenStreetMap and
 AWS Terrain Tiles) directly.
 
-**Live:** https://llimos.github.io/techumin/
+**Live:** https://techum.app
 
 > **Disclaimer:** This tool estimates techum boundaries for reference only.
 > The results depend on the completeness of OpenStreetMap data and on
